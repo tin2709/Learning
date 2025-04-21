@@ -1,0 +1,7 @@
+1 hstore không phải là một kiểu dữ liệu được tích hợp sẵn (built-in) trong PostgreSQL theo mặc định. Nó là một extension (phần mở rộng) mà bạn cần phải kích hoạt (enable)
+CREATE EXTENSION IF NOT EXISTS hstore;
+CREATE TABLE books (
+    id serial PRIMARY KEY,
+    title VARCHAR(255),
+    attr hstore 
+);
