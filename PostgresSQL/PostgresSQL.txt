@@ -17,3 +17,435 @@ VALUES
 ),
 Chọn ra key muốn lấy value :SELECT attr -> 'ISBN-13' AS isbn
 FROM books;
+- 2 Giả sử chúng ta có bảng sales với các cột brand, segment, và quantity như sau:
+
+brand	segment	quantity
+Apple	Mobile	100
+Samsung	Mobile	150
+Apple	Laptop	80
+Dell	Laptop	120
+Apple	Mobile	50
+Samsung	Tablet	70
+Dell	Desktop	90
+
+
+SELECT brand, segment, SUM (quantity) FROM sales GROUP BY GROUPING SETS ( (brand, segment), (brand), (segment), () );
+
+Kết quả trong PostgrSQL:
+
+brand	segment	sum
+Apple	Mobile	150
+Samsung	Mobile	150
+Apple	Laptop	80
+Dell	Laptop	120
+Samsung	Tablet	70
+Dell	Desktop	90
+Apple	NULL	230
+Samsung	NULL	220
+Dell	NULL	210
+NULL	Mobile	250
+NULL	Laptop	200
+NULL	Tablet	70
+NULL	Desktop	90
+NULL	NULL	610
+
+Giải thích kết quả PostgreSQL:
+
+
+
+Câu lệnh MySQL tương đương:
+
+
+SELECT brand,segment,
+SUM (quantity)
+FROM
+sales
+GROUP BY
+brand, segment
+
+UNION ALL
+
+SELECT
+brand,
+NULL AS segment,
+SUM (quantity)
+FROM
+sales
+GROUP BY
+brand
+
+UNION ALL
+
+SELECT
+NULL AS brand,
+segment,
+SUM (quantity)
+FROM
+sales
+GROUP BY
+segment
+
+UNION ALL
+
+SELECT
+NULL AS brand,
+NULL AS segment,
+SUM (quantity)
+FROM
+sales;
+
+
+Kết quả trong MySQL (tương đương):
+
+MySQL sẽ trả về một tập kết quả có các hàng tương tự như trên, chỉ là thứ tự các hàng có thể khác nhau do UNION ALL không đảm bảo thứ tự.
+
+brand	segment	SUM(quantity)
+Apple	Mobile	150
+Samsung	Mobile	150
+Apple	Laptop	80
+Dell	Laptop	120
+Samsung	Tablet	70
+Dell	Desktop	90
+Apple	NULL	230
+Samsung	NULL	220
+Dell	NULL	210
+NULL	Mobile	250
+NULL	Laptop	200
+NULL	Tablet	70
+NULL	Desktop	90
+NULL	NULL	610
+
+Lưu ý về MySQL:
+
+Thứ tự các hàng trong kết quả của MySQL có thể khác với PostgreSQL vì UNION ALL không duy trì thứ tự. Nếu bạn cần một thứ tự cụ thể, bạn có thể thêm mệnh đề ORDER BY vào từng câu lệnh SELECT và có thể thêm một cột phụ để chỉ định loại nhóm trước khi UNION ALL để có thể sắp xếp kết quả cuối cùng. 
+Tuy nhiên, điều này làm tăng thêm sự phức tạp cho câu lệnh.
+Ví dụ này làm rõ cách GROUPING SETS trong PostgreSQL cho phép bạn định nghĩa nhiều cách nhóm dữ liệu trong một truy vấn duy nhất, tạo ra một tập kết quả tổng hợp đa chiều. Nó cũng minh họa cách bạn có thể đạt được kết quả tương tự trong MySQL bằng cách sử dụng UNION ALL và nhiều câu lệnh GROUP BY riêng biệt.
+- 3 Tuyệt vời, dựa trên hướng dẫn về CUBE trong PostgreSQL từ link bạn cung cấp, đây là ví dụ cụ thể với dữ liệu mẫu cho bảng sales và kết quả của câu lệnh SELECT ... GROUP BY CUBE(...).
+
+Dữ liệu mẫu cho bảng sales:
+
+Giả sử chúng ta vẫn sử dụng bảng sales với các cột brand, segment, và quantity:
+
+brand	segment	quantity
+Apple	Mobile	100
+Samsung	Mobile	150
+Apple	Laptop	80
+Dell	Laptop	120
+Apple	Mobile	50
+Samsung	Tablet	70
+Dell	Desktop	90
+
+Câu lệnh PostgreSQL sử dụng CUBE:
+
+sql SELECT brand, segment, SUM (quantity) FROM sales GROUP BY CUBE (brand, segment) ORDER BY brand, segment; -- Thêm ORDER BY để dễ đọc
+
+Kết quả trong PostgreSQL:
+
+brand	segment	sum
+NULL	NULL	610
+NULL	Desktop	90
+NULL	Laptop	200
+NULL	Mobile	250
+NULL	Tablet	70
+Apple	NULL	230
+Apple	Laptop	80
+Apple	Mobile	150
+Apple	Tablet	NULL
+Dell	NULL	210
+Dell	Desktop	90
+Dell	Laptop	120
+Dell	Mobile	NULL
+Dell	Tablet	NULL
+Samsung	NULL	220
+Samsung	Mobile	150
+Samsung	Tablet	70
+Samsung	Laptop	NULL
+
+Giải thích kết quả PostgreSQL với CUBE(brand, segment):
+
+Mệnh đề GROUP BY CUBE (brand, segment) tạo ra các nhóm cho tất cả các tổ hợp có thể của các cột brand và segment, bao gồm cả các tổng hợp trên từng cột riêng lẻ và tổng hợp toàn bộ:
+
+So sánh với GROUPING SETS:
+
+Câu lệnh trên tương đương với việc sử dụng GROUPING SETS như sau:
+
+sql SELECT brand, segment, SUM (quantity) FROM sales GROUP BY GROUPING SETS ( (brand, segment), (brand), (segment), () ) ORDER BY brand, segment;
+
+Tuy nhiên, CUBE(brand, segment) tự động tạo ra tất cả 2^n tổ hợp nhóm có thể (trong trường hợp này n=2, nên có 2^2 = 4 tổ hợp: (brand, segment), (brand), (segment), ()). Điều này tiện lợi khi bạn muốn phân tích dữ liệu theo tất cả các mức độ tổng hợp có thể của một tập hợp các cột.
+
+Lưu ý:
+
+Trong kết quả, bạn sẽ thấy các hàng có giá trị NULL ở các cột nhóm. NULL ở đây không có nghĩa là giá trị thực tế là null trong dữ liệu gốc, mà nó biểu thị rằng hàng đó là kết quả của việc tổng hợp trên các nhóm mà cột đó không được xem xét (ví dụ: hàng Apple | NULL | 230 là tổng của tất cả các segment cho brand Apple).
+
+ORDER BY brand, segment được thêm vào chỉ để làm cho kết quả dễ đọc và hiểu hơn.
+- 4  SELECT brand, segment, SUM (quantity) FROM sales GROUP BY ROLLUP (brand, segment) ORDER BY brand, segment NULLS FIRST; 
+Kết quả trong PostgreSQL:
+brand	segment	sum
+NULL	NULL	610
+Apple	NULL	230
+Apple	Laptop	80
+Apple	Mobile	150
+Dell	NULL	210
+Dell	Desktop	90
+Dell	Laptop	120
+Samsung	NULL	220
+Samsung	Mobile	150
+Samsung	Tablet	70
+Giải thích kết quả PostgreSQL với ROLLUP(brand, segment):
+Mệnh đề GROUP BY ROLLUP (brand, segment) tạo ra các nhóm tổng hợp theo một thứ bậc từ trái sang phải của các cột được liệt kê:
+Tổng hợp theo tất cả các cột: (brand, segment) - tương tự như GROUP BY brand, segment.
+Tổng hợp theo cột đầu tiên: (brand) - bỏ qua các cột theo sau.
+Tổng hợp toàn bộ: () - bỏ qua tất cả các cột được liệt kê trong ROLLUP.
+Lưu ý quan trọng về thứ tự: Thứ tự của các cột trong mệnh đề ROLLUP rất quan trọng. ROLLUP (brand, segment) sẽ tạo ra các tổng hợp theo thứ tự: (brand, segment), (brand), và (). 
+Nếu bạn đổi thứ tự thành ROLLUP (segment, brand), các tổng hợp sẽ theo (segment, brand), (segment), và ().
+ROLLUP trong PostgreSQL và WITH ROLLUP trong MySQL đều cung cấp khả năng tạo các hàng tổng hợp theo một thứ bậc xác định bởi thứ tự các cột trong mệnh đề GROUP BY.
+- 5 Giả sử chúng ta có hai bảng:
+
+Bảng products:
+
+product_id	product_name	price
+1	Laptop Pro	1200
+2	Mouse Wired	25
+3	Keyboard RGB	75
+4	Monitor 27"	300
+
+Bảng sales_info:
+
+sale_id	product_id	discount_rate
+101	1	0.10
+102	3	0.05
+103	1	0.15
+104	4	0.08
+
+Mục tiêu: Chúng ta muốn cập nhật giá trong bảng products bằng cách giảm giá dựa trên discount_rate trong bảng sales_info cho những sản phẩm có trong cả hai bảng.
+
+Câu lệnh PostgreSQL sử dụng UPDATE với JOIN:
+
+UPDATE products
+SET price = products.price * (1 - sales_info.discount_rate)
+FROM sales_info
+WHERE products.product_id = sales_info.product_id;
+
+
+Giải thích câu lệnh PostgreSQL:
+
+UPDATE products: Chỉ định bảng mà chúng ta muốn cập nhật (products).
+
+SET price = products.price * (1 - sales_info.discount_rate): Xác định cột cần cập nhật (price) và cách tính giá trị mới. Chúng ta lấy giá hiện tại từ bảng products và nhân với (1 - discount_rate) lấy từ bảng sales_info.
+
+FROM sales_info: Chỉ định bảng mà chúng ta sẽ tham gia (sales_info).
+
+WHERE products.product_id = sales_info.product_id: Điều kiện JOIN để liên kết các hàng từ products và sales_info dựa trên cột product_id. Chỉ những sản phẩm có product_id trùng khớp trong cả hai bảng mới được cập nhật.
+
+Kết quả sau khi chạy câu lệnh PostgreSQL:
+
+Bảng products sau khi cập nhật:
+
+product_id	product_name	price
+1	Laptop Pro	1020.00
+2	Mouse Wired	25.00
+3	Keyboard RGB	71.25
+4	Monitor 27"	276.00
+
+Lưu ý: Sản phẩm có product_id = 2 (Mouse Wired) không có bản ghi tương ứng trong sales_info, vì vậy giá của nó không bị thay đổi. Nếu có nhiều bản ghi trong sales_info cho cùng một product_id, hành vi cập nhật có thể không xác định (trong ví dụ này, product_id = 1 xuất hiện hai lần trong sales_info, nhưng câu lệnh sẽ chỉ thực hiện cập nhật dựa trên việc có một hàng khớp, có thể là hàng đầu tiên tìm thấy). Để kiểm soát việc này tốt hơn, bạn có thể cần các điều kiện JOIN phức tạp hơn hoặc sử dụng các phương pháp khác.
+
+UPDATE JOIN tương tự trong MySQL:
+
+MySQL cung cấp cú pháp UPDATE với JOIN trực tiếp sử dụng từ khóa JOIN (hoặc INNER JOIN, LEFT JOIN, v.v.) trong mệnh đề UPDATE:
+
+UPDATE products
+INNER JOIN sales_info ON products.product_id = sales_info.product_id
+SET products.price = products.price * (1 - sales_info.discount_rate);
+
+Kết luận:
+
+PostgreSQL và MySQL đều hỗ trợ việc cập nhật dữ liệu trong một bảng dựa trên dữ liệu từ một bảng khác thông qua phép JOIN.
+
+PostgreSQL sử dụng cú pháp UPDATE target_table SET ... FROM joined_table WHERE join_condition.
+
+MySQL sử dụng cú pháp UPDATE target_table INNER JOIN joined_table ON join_condition SET ....
+- 6 Dữ liệu mẫu:
+
+Giả sử chúng ta có bảng inventory với các cột product_id, quantity, và last_updated:
+
+product_id	quantity	last_updated
+1	100	2023-10-26 10:00:00
+2	50	2023-10-26 10:00:00
+3	75	2023-10-26 10:00:00
+
+Chúng ta muốn thực hiện các thao tác sau:
+
+Thêm một sản phẩm mới (product_id = 4) với số lượng ban đầu.
+
+Cập nhật số lượng cho một sản phẩm đã tồn tại (product_id = 1).
+
+Câu lệnh PostgreSQL sử dụng INSERT ON CONFLICT (UPSERT):
+
+Để sử dụng ON CONFLICT, chúng ta cần một ràng buộc UNIQUE trên cột mà chúng ta muốn kiểm tra xung đột. Trong trường hợp này, product_id nên là UNIQUE. Chúng ta có thể tạo ràng buộc này nếu nó chưa tồn tại:
+
+sql ALTER TABLE inventory ADD CONSTRAINT inventory_product_id_unique UNIQUE (product_id);
+
+Bây giờ, chúng ta có thể thực hiện UPSERT:
+
+-- Thêm sản phẩm mới (product_id = 4)
+INSERT INTO inventory (product_id, quantity, last_updated)
+VALUES (4, 20, NOW())
+ON CONFLICT (product_id) DO NOTHING;
+-- Vì product_id = 4 chưa tồn tại, hàng này sẽ được thêm vào.
+
+-- Cập nhật số lượng sản phẩm đã tồn tại (product_id = 1)
+INSERT INTO inventory (product_id, quantity, last_updated)
+VALUES (1, 120, NOW())
+ON CONFLICT (product_id) DO UPDATE SET
+quantity = EXCLUDED.quantity,
+last_updated = EXCLUDED.last_updated;
+-- Vì product_id = 1 đã tồn tại, hàng sẽ được cập nhật.
+-- EXCLUDED chứa các giá trị được đề xuất cho hàng mới.
+
+Giải thích câu lệnh PostgreSQL:
+
+INSERT INTO inventory (product_id, quantity, last_updated) VALUES (...): Đây là câu lệnh INSERT thông thường để chèn một hàng mới vào bảng inventory.
+
+ON CONFLICT (product_id): Điều khoản này chỉ định cột mà PostgreSQL sẽ kiểm tra xung đột UNIQUE. Nếu một hàng với product_id đã tồn tại, hành động sau DO sẽ được thực hiện.
+
+DO NOTHING: Nếu xảy ra xung đột (tức là product_id đã tồn tại), không thực hiện hành động gì cả. Trong ví dụ đầu tiên, nếu product_id = 4 đã tồn tại (điều này không xảy ra trong dữ liệu ban đầu), hàng mới sẽ không được thêm vào và hàng cũ sẽ không bị thay đổi.
+
+DO UPDATE SET quantity = EXCLUDED.quantity, last_updated = EXCLUDED.last_updated: Nếu xảy ra xung đột (tức là product_id đã tồn tại), hãy thực hiện lệnh UPDATE trên hàng hiện có.
+
+EXCLUDED là một bảng ảo chứa các giá trị được đề xuất trong câu lệnh INSERT.
+
+quantity = EXCLUDED.quantity cập nhật cột quantity của hàng hiện có bằng giá trị quantity từ câu lệnh INSERT.
+
+last_updated = EXCLUDED.last_updated tương tự, cập nhật dấu thời gian.
+
+Kết quả sau khi chạy câu lệnh PostgreSQL:
+
+Bảng inventory sau khi thực hiện UPSERT:
+
+product_id	quantity	last_updated
+1	120	2023-10-27 08:00:00
+2	50	2023-10-26 10:00:00
+3	75	2023-10-26 10:00:00
+4	20	2023-10-27 08:00:00
+
+(Lưu ý: NOW() sẽ trả về thời gian hiện tại khi bạn chạy câu lệnh, nên dấu thời gian thực tế sẽ khác với ví dụ ban đầu).
+
+UPSERT tương tự trong MySQL:
+
+MySQL không có cú pháp ON CONFLICT trực tiếp như PostgreSQL. Tuy nhiên, bạn có thể thực hiện hành vi UPSERT tương tự bằng cách sử dụng cú pháp INSERT ... ON DUPLICATE KEY UPDATE. Điều này yêu cầu bảng phải có một khóa UNIQUE hoặc PRIMARY KEY trên cột (hoặc tổ hợp cột) mà bạn muốn kiểm tra trùng lặp.
+
+Sử dụng lại bảng inventory và đảm bảo product_id là UNIQUE (nếu chưa có, hãy tạo index UNIQUE):
+
+sql ALTER TABLE inventory ADD UNIQUE INDEX inventory_product_id_unique (product_id);
+
+Bây giờ, bạn có thể thực hiện UPSERT trong MySQL như sau:
+
+-- Thêm sản phẩm mới (product_id = 4) hoặc không làm gì nếu đã tồn tại
+INSERT IGNORE INTO inventory (product_id, quantity, last_updated)
+VALUES (4, 20, NOW());
+-- INSERT IGNORE sẽ bỏ qua nếu có lỗi khóa trùng lặp.
+
+-- Thêm sản phẩm mới (product_id = 1) hoặc cập nhật nếu đã tồn tại
+INSERT INTO inventory (product_id, quantity, last_updated)
+VALUES (1, 120, NOW())
+ON DUPLICATE KEY UPDATE
+quantity = VALUES(quantity),
+last_updated = VALUES(last_updated);
+-- Nếu product_id đã tồn tại, các cột quantity và last_updated sẽ được cập nhật
+-- bằng các giá trị được cung cấp trong mệnh đề VALUES().
+
+SELECT * FROM inventory;
+``
+
+Giải thích câu lệnh MySQL:
+
+INSERT IGNORE INTO ...: Nếu bạn cố gắng chèn một hàng có khóa trùng lặp, MySQL sẽ bỏ qua lỗi và hàng sẽ không được chèn (và hàng cũ sẽ không bị thay đổi). Điều này tương đương với ON CONFLICT DO NOTHING trong PostgreSQL.
+
+INSERT INTO ... ON DUPLICATE KEY UPDATE ...: Nếu bạn cố gắng chèn một hàng gây ra lỗi trùng lặp khóa (dựa trên khóa UNIQUE hoặc PRIMARY KEY), MySQL sẽ không báo lỗi mà thay vào đó sẽ thực hiện mệnh đề UPDATE.
+
+VALUES(column_name): Trong mệnh đề ON DUPLICATE KEY UPDATE, VALUES(column_name) tham chiếu đến giá trị mà bạn đã cố gắng chèn cho column_name trong mệnh đề INSERT.
+
+Kết quả sau khi chạy câu lệnh MySQL (với dữ liệu mẫu tương tự):
+
+Bảng inventory sau khi thực hiện UPSERT trong MySQL sẽ cho kết quả tương tự như trong PostgreSQL:
+
+product_id	quantity	last_updated
+1	120	2023-10-27 08:00:00
+2	50	2023-10-26 10:00:00
+3	75	2023-10-26 10:00:00
+4	20	2023-10-27 08:00:00
+
+Kết luận:
+
+PostgreSQL cung cấp cú pháp INSERT ... ON CONFLICT ... DO NOTHING/UPDATE cho thao tác UPSERT, là một phần của chuẩn SQL gần đây.
+
+MySQL cung cấp INSERT IGNORE INTO cho hành vi "insert or do nothing" và INSERT ... ON DUPLICATE KEY UPDATE cho hành vi "insert or update" dựa trên khóa UNIQUE hoặc PRIMARY KEY.
+- 7.1 TEMPORARY TABLE AS SELECT là gì?
+📌 Khái niệm:
+Tạo một bảng tạm thời từ một truy vấn SELECT.
+
+Bảng chỉ tồn tại trong phiên làm việc hiện tại (session).
+
+Khi session kết thúc (ngắt kết nối), bảng sẽ tự động bị xóa.
+
+✅ Khi nào nên dùng:
+Khi bạn muốn lưu dữ liệu tạm thời, ví dụ: xử lý trung gian, phân tích báo cáo, thống kê,...
+
+Tránh ảnh hưởng đến dữ liệu thật trong hệ thống.
+
+CREATE TEMPORARY TABLE temp_users AS
+SELECT * FROM users WHERE age > 30;
+
+- 7.2  UNLOGGED TABLE là gì?
+📌 Khái niệm:
+Là loại bảng không ghi log (WAL - Write-Ahead Logging) như các bảng bình thường trong PostgreSQL.
+
+Vì không log, nên hiệu năng ghi/đọc rất nhanh.
+
+Nhưng nếu hệ thống bị tắt đột ngột (crash), dữ liệu trong bảng này sẽ mất.
+
+✅ Khi nào nên dùng:
+Dùng trong các tác vụ cần xử lý rất nhanh, không cần đảm bảo dữ liệu tồn tại sau crash:
+
+ETL (trích xuất dữ liệu - chuyển đổi - tải lên)
+
+Tạm thời lưu dữ liệu cho báo cáo
+
+Phân tích log, audit tạm
+CREATE UNLOGGED TABLE fast_buffer AS
+SELECT * FROM big_table WHERE status = 'active';
+- 8 GENERATED ALWAYS AS IDENTITY mà không có tùy chọn nào khác, nó sẽ bắt đầu từ 1 và tăng dần 1.
+CREATE TABLE products (
+    id INT GENERATED ALWAYS AS IDENTITY,
+    name VARCHAR(100) NOT NULL,
+    price DECIMAL(10, 2)
+);
+CREATE TABLE categories (
+    id INT GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 10),
+    name VARCHAR(50) NOT NULL
+);
+ id  |    name
+-----+------------
+ 100 | Electronics
+ 110 | Books
+(2 rows)
+- 9 Composite Type:
+CREATE TYPE address AS (
+    street VARCHAR(100),
+    city VARCHAR(50),
+    postal_code VARCHAR(10)
+);
+Enum Type:
+CREATE TYPE order_status AS ENUM ('pending', 'processing', 'shipped', 'delivered', 'cancelled');
+Domain Type:
+CREATE DOMAIN email AS VARCHAR(255) CHECK (VALUE LIKE '%@%.%');
+CREATE TABLE customers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    shipping_address address,
+    billing_address address,
+    order_status order_status,
+    contact_email email
+);
+PostgreSQL cung cấp một hệ thống mạnh mẽ cho việc định nghĩa các kiểu dữ liệu do người dùng, bao gồm Composite Types, Enum Types và Domain Types.
+MySQL có hỗ trợ cho Enum Types và Set Types
