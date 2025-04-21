@@ -5,3 +5,15 @@ CREATE TABLE books (
     title VARCHAR(255),
     attr hstore 
 );
+1.1 Kiểu hstore lưu giá trị theo kiểu key => value: INSERT INTO books (title, attr)
+VALUES
+(
+'Winds Of Winter',
+'"paperback" => "2403",
+"publisher" => "Bantam Spectra/US & Voyager Books/UK",
+"language"  => "English",
+"ISBN-13"   => "978-1449370000",
+"weight"    => "13.2 ounces"'
+),
+Chọn ra key muốn lấy value :SELECT attr -> 'ISBN-13' AS isbn
+FROM books;
