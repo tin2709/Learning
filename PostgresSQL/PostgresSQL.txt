@@ -1,11 +1,11 @@
-1 hstore không phải là một kiểu dữ liệu được tích hợp sẵn (built-in) trong PostgreSQL theo mặc định. Nó là một extension (phần mở rộng) mà bạn cần phải kích hoạt (enable)
+- 1 hstore không phải là một kiểu dữ liệu được tích hợp sẵn (built-in) trong PostgreSQL theo mặc định. Nó là một extension (phần mở rộng) mà bạn cần phải kích hoạt (enable)
 CREATE EXTENSION IF NOT EXISTS hstore;
 CREATE TABLE books (
     id serial PRIMARY KEY,
     title VARCHAR(255),
     attr hstore 
 );
-1.1 Kiểu hstore lưu giá trị theo kiểu key => value: INSERT INTO books (title, attr)
+- 1.1 Kiểu hstore lưu giá trị theo kiểu key => value: INSERT INTO books (title, attr)
 VALUES
 (
 'Winds Of Winter',
@@ -17,6 +17,14 @@ VALUES
 ),
 Chọn ra key muốn lấy value :SELECT attr -> 'ISBN-13' AS isbn
 FROM books;
+- 1.2 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE TABLE users (
+user_id SERIAL PRIMARY KEY,
+username VARCHAR(50) UNIQUE NOT NULL,
+email VARCHAR(100) UNIQUE NOT NULL,
+registration_uuid UUID DEFAULT gen_random_uuid(),
+created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+Extension uuid-ossp cung cấp các hàm để tạo UUID (Universally Unique Identifier), bao gồm gen_random_uuid()
 - 2 Giả sử chúng ta có bảng sales với các cột brand, segment, và quantity như sau:
 
 brand	segment	quantity
@@ -449,3 +457,41 @@ CREATE TABLE customers (
 );
 PostgreSQL cung cấp một hệ thống mạnh mẽ cho việc định nghĩa các kiểu dữ liệu do người dùng, bao gồm Composite Types, Enum Types và Domain Types.
 MySQL có hỗ trợ cho Enum Types và Set Types
+- 10.1 SELECT 
+    brand, 
+    segment, 
+    CASE 
+        WHEN quantity ~ '^[0-9]+$' THEN quantity::INTEGER 
+        ELSE NULL 
+    END AS quantity_int
+FROM sales;
+Lệnh này chỉ ép kiểu thành INTEGER nếu quantity chỉ chứa các chữ số (được kiểm tra bằng biểu thức chính quy ^[0-9]+$). Nếu không, nó sẽ trả về NULL.
+- 11 SELECT attr -> 'publisher'
+FROM books
+WHERE attr -> 'publisher' ILIKE '%bantam%';
+ILIKE '%bantam%': Thực hiện so sánh không phân biệt chữ hoa chữ thường để xem giá trị đã trích xuất có chứa chuỗi "bantam" hay không (sử dụng ký tự % làm ký tự đại diện cho bất kỳ chuỗi ký tự nào).
+- 10.2 SELECT attr -> 'weight'
+FROM books
+WHERE (attr -> 'weight') IS DISTINCT FROM '13.2 ounces';
+SELECT attr -> 'weight'
+FROM books
+WHERE (attr -> 'weight') IS NOT DISTINCT FROM '13.2 ounces';
+IS DISTINCT FROM trả về TRUE nếu hai giá trị khác nhau (bao gồm cả trường hợp một trong hai là NULL).
+IS NOT DISTINCT FROM trả về TRUE nếu hai giá trị bằng nhau (bao gồm cả trường hợp cả hai đều là NULL).
+- 11 PostgreSQL:
+Case-sensitive: SELECT * FROM books WHERE title ~ 'Win.*er';
+Case-insensitive: SELECT * FROM books WHERE title ~* 'win.*er';
+Không khớp (case-sensitive): SELECT * FROM books WHERE title !~ 'Win.*er';
+Không khớp (case-insensitive): SELECT * FROM books WHERE title !~* 'win.*er';
+MySQL:
+Case-sensitive (cần sử dụng BINARY): SELECT * FROM books WHERE title REGEXP BINARY 'Win.*er';
+Case-insensitive (mặc định): SELECT * FROM books WHERE title REGEXP 'win.*er'; hoặc SELECT * FROM books WHERE title RLIKE 'win.*er';
+Không khớp (case-sensitive): SELECT * FROM books WHERE title NOT REGEXP BINARY 'Win.*er';
+Không khớp (case-insensitive): SELECT * FROM books WHERE title NOT REGEXP 'win.*er'; hoặc SELECT * FROM books WHERE title NOT RLIKE 'win.*er';
+PostgreSQL	MySQL	Chức năng	Độ nhạy chữ hoa
+~	REGEXP BINARY	Khớp với biểu thức chính quy	Case-sensitive
+~*	REGEXP	Khớp với biểu thức chính quy	Case-insensitive
+!~	NOT REGEXP BINARY	Không khớp với biểu thức chính quy	Case-sensitive
+!~*	NOT REGEXP	Không khớp với biểu thức chính quy	Case-insensitive
+- 12 PostgreSQL hiển thị true và false cho kiểu BOOLEAN, trong khi MySQL hiển thị 0 và 1 (vì nó là TINYINT(1)).
+- 13 
