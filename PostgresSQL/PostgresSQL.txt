@@ -25,6 +25,9 @@ email VARCHAR(100) UNIQUE NOT NULL,
 registration_uuid UUID DEFAULT gen_random_uuid(),
 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 Extension uuid-ossp cung cấp các hàm để tạo UUID (Universally Unique Identifier), bao gồm gen_random_uuid()
+- 1.3 pg_stat_statements là một extension rất hữu ích cung cấp thống kê về việc thực thi tất cả các câu lệnh SQL đã được thực hiện bởi máy chủ PostgreSQL
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+SELECT count(*) FROM pg_stat_statements;
 - 2 Giả sử chúng ta có bảng sales với các cột brand, segment, và quantity như sau:
 
 brand	segment	quantity
@@ -494,7 +497,8 @@ PostgreSQL	MySQL	Chức năng	Độ nhạy chữ hoa
 !~	NOT REGEXP BINARY	Không khớp với biểu thức chính quy	Case-sensitive
 !~*	NOT REGEXP	Không khớp với biểu thức chính quy	Case-insensitive
 - 12 PostgreSQL hiển thị true và false cho kiểu BOOLEAN, trong khi MySQL hiển thị 0 và 1 (vì nó là TINYINT(1)).
-- 13 CREATE TABLE articles (
+
+- 13.1 CREATE TABLE articles (
 article_id SERIAL PRIMARY KEY,
 title VARCHAR(255) NOT NULL,
 content TEXT,
@@ -534,3 +538,407 @@ Thêm một thẻ mới vào mảng (sử dụng toán tử || - concatenation):
 UPDATE articles
 SET tags = tags || '{"database"}'
 WHERE title = 'Introduction to Arrays in PostgreSQL';
+- 13.2 1. Tạo Bảng với Mảng Hai Chiều:
+Chúng ta sẽ tạo một bảng chess_boards để lưu trữ trạng thái của các ván cờ. Mỗi trạng thái sẽ được biểu diễn bằng một mảng 2 chiều các ký tự.
+SQL
+CREATE TABLE chess_boards (
+board_id SERIAL PRIMARY KEY,
+description VARCHAR(255),
+board_state CHAR(1) [][8]
+);
+Giải thích:
+board_state CHAR(1) [][8]: Định nghĩa một cột tên board_state là một mảng hai chiều.
+CHAR(1): Mỗi phần tử trong mảng sẽ là một ký tự đơn (ví dụ: 'r' cho rook, 'p' cho pawn, '.' cho ô trống).
+[][8]: Chỉ định rằng đây là một mảng hai chiều. Kích thước của chiều thứ hai cố định là 8 (tượng trưng cho 8 cột của bàn cờ). Kích thước của chiều thứ nhất (số hàng) không được chỉ định ở đây, nhưng khi chèn dữ liệu, chúng ta sẽ tạo mảng 8x8.
+2. Chèn Dữ liệu với Mảng Hai Chiều:
+Chúng ta sẽ chèn trạng thái ban đầu của một ván cờ.
+SQL
+INSERT INTO chess_boards (description, board_state)
+VALUES (
+'Initial board state',
+'{{'r','n','b','q','k','b','n','r'},
+{'p','p','p','p','p','p','p','p'},
+{'.','.','.','.','.','.','.','.'},
+{'.','.','.','.','.','.','.','.'},
+{'.','.','.','.','.','.','.','.'},
+{'.','.','.','.','.','.','.','.'},
+{'P','P','P','P','P','P','P','P'},
+{'R','N','B','Q','K','B','N','R'}}'
+);
+Giải thích:
+Cấu trúc của mảng 2 chiều được biểu diễn bằng các dấu ngoặc nhọn lồng nhau.
+Các hàng được bao quanh bởi dấu ngoặc nhọn bên trong, và các phần tử trong mỗi hàng được phân tách bằng dấu phẩy.
+Các hàng được phân tách bằng dấu phẩy và toàn bộ mảng được bao quanh bởi dấu ngoặc nhọn bên ngoài cùng.
+3. Truy cập Phần Tử Mảng theo Chỉ Mục:
+Lấy quân cờ ở hàng 1, cột 1 (góc trên bên trái, quân rook đen) của ván cờ đầu tiên.
+SQL
+SELECT description, board_state [1][1] AS top_left_piece
+FROM chess_boards
+WHERE board_id = 1;
+Lấy hàng thứ hai (các quân pawn đen) của ván cờ đầu tiên.
+SQL
+SELECT description, board_state [2] AS black_pawns
+FROM chess_boards
+WHERE board_id = 1;
+Lấy một slice của hàng thứ hai (3 quân pawn đen đầu tiên).
+SQL
+SELECT description, board_state [2][1:3] AS first_three_black_pawns
+FROM chess_boards
+WHERE board_id = 1;
+4. Sửa đổi Phần Tử Mảng theo Chỉ Mục:
+Di chuyển quân pawn đen ở hàng 2, cột 3 lên một ô (hàng 3, cột 3).
+SQL
+UPDATE chess_boards
+SET board_state [2][3] = '.',
+board_state [3][3] = 'p'
+WHERE board_id = 1;
+5. Toán tử @> (Contains) và <@ (Contained By) với Mảng 2 Chiều (Ít Phổ Biến hơn):
+Việc sử dụng @> và <@ trực tiếp trên mảng 2 chiều để so sánh "chứa" và "bị chứa" có thể phức tạp và ít trực quan hơn so với mảng một chiều. PostgreSQL sẽ so sánh xem một mảng 2 chiều có chứa một mảng con 2 chiều khác hay không.
+Ví dụ (có thể không mang nhiều ý nghĩa trong ngữ cảnh bàn cờ):
+Giả sử chúng ta chèn thêm một trạng thái bảng cờ có một phần giống với trạng thái ban đầu.
+SQL
+INSERT INTO chess_boards (description, board_state)
+VALUES (
+'Partial board state',
+'{{'r','n','b'},
+{'p','p','p'}}'
+);
+Kiểm tra xem trạng thái ban đầu có chứa trạng thái "Partial board state" (điều này sẽ trả về false vì kích thước khác nhau):
+SQL
+SELECT b1.description, b2.description
+FROM chess_boards b1, chess_boards b2
+WHERE b1.board_id = 1 AND b2.board_id = 2
+AND b1.board_state @> b2.board_state;
+Để so sánh các phần tử cụ thể, bạn có thể cần truy cập chúng bằng chỉ mục.
+6. Toán tử = (Equal) cho Mảng 2 Chiều:
+Chèn một bản sao của trạng thái ban đầu.
+SQL
+INSERT INTO chess_boards (description, board_state)
+SELECT 'Copy of initial state', board_state
+FROM chess_boards
+WHERE board_id = 1;
+So sánh hai trạng thái bảng cờ xem chúng có giống nhau không.
+SQL
+SELECT b1.description, b2.description
+FROM chess_boards b1, chess_boards b2
+WHERE b1.board_id = 1 AND b2.board_id = 3
+AND b1.board_state = b2.board_state;
+7. Toán tử && (Overlap) với Mảng 2 Chiều (Cũng Ít Phổ Biến):
+Toán tử && kiểm tra xem hai mảng có bất kỳ phần tử chung nào không. Với mảng 2 chiều, điều này có nghĩa là chúng có ít nhất một cặp chỉ mục (i, j) mà giá trị tại đó bằng nhau.
+Ví dụ (có thể không thực tế cho bàn cờ):
+SQL
+INSERT INTO chess_boards (description, board_state)
+VALUES (
+'Overlapping state',
+'{{'x','n','b','q','k','b','n','y'},
+{'p','z','p','p','p','p','p','w'},
+{'.','.','.','.','.','.','.','.'},
+{'.','.','.','.','.','.','.','.'},
+{'.','.','.','.','.','.','.','.'},
+{'.','.','.','.','.','.','.','.'},
+{'P','P','P','P','P','P','P','P'},
+{'R','N','B','Q','K','B','N','R'}}'
+);
+SQL
+SELECT b1.description, b3.description
+FROM chess_boards b1, chess_boards b3
+WHERE b1.board_id = 1 AND b3.board_id = 4
+AND b1.board_state && b3.board_state; -- Sẽ trả về true vì có nhiều phần tử trùng nhau
+8. Hàm Mảng Nâng Cao với Mảng 2 Chiều:
+array_length(board_state, 1): Lấy số hàng (8 trong trường hợp này).
+array_length(board_state, 2): Lấy số cột (8 trong trường hợp này).
+array_dims(board_state): Trả về kích thước mảng (ví dụ: "[2:9][1:8]" nếu bạn đã chèn thêm dữ liệu).
+unnest(board_state): Sẽ trải phẳng mảng 2 chiều thành một tập hợp các hàng, mỗi hàng chứa một phần tử. Bạn có thể cần sử dụng WITH ORDINALITY để theo dõi vị trí.
+SQL
+SELECT (unnest(board_state)).*, row_num, col_num
+FROM chess_boards,
+LATERAL unnest(board_state) WITH ORDINALITY AS b(piece, row_num)
+LATERAL (SELECT generate_series(1, array_length(board_state, 2))) AS cols(col_num)
+WHERE board_id = 1
+
+- 14 INSERT INTO books (title, attr)
+VALUES (
+'The Hedge Knight',
+'"paperback" => "350",
+"publisher" => "Tor Books",
+"language" => "English",
+"ISBN-13" => "978-0765359271",
+"weight" => "5.3 ounces"'
+)
+RETURNING id, attr -> 'publisher' AS publisher;
+INSERT INTO books (title, attr)
+VALUES
+(
+'The Sworn Sword',
+'"paperback" => "208",
+"publisher" => "Tor Books",
+"language" => "English",
+"ISBN-13" => "978-0765359288",
+"weight" => "3.2 ounces"'
+),
+(
+'The Mystery Knight',
+'"paperback" => "384",
+"publisher" => "Tor Books",
+"language" => "English",
+"ISBN-13" => "978-0765359295",
+"weight" => "6.1 ounces"'
+)
+RETURNING *;
+Mệnh đề RETURNING trong Postgres cho phép bạn nhận lại giá trị của các cột từ các hàng vừa bị tác động bởi các câu lệnh DML (Data Manipulation Language) như INSERT, UPDATE, hoặc DELETE.
+Nó hoạt động giống như một câu lệnh SELECT được thực hiện đồng thời trên các hàng vừa mới được thêm, sửa đổi hoặc xóa.
+- 15 CREATE EXTENSION pgcrypto;
+CREATE TABLE usersTest2 (
+id SERIAL PRIMARY KEY,
+username VARCHAR(50) UNIQUE NOT NULL,
+password_hash TEXT NOT NULL,
+email VARCHAR(100) UNIQUE,
+created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO usersTest2 (username, password_hash, email)
+VALUES ('john.doe', crypt('secure123', gen_salt('bf')), 'john.doe@example.com');
+SELECT * FROM usersTest2
+SELECT username
+FROM usersTest2
+WHERE username = 'john.doe'
+AND password_hash = crypt('secure123', password_hash);
+Lệnh insert vào bảng usersTest2 với mật khẩu đã được mã hóa và select ra tên dựa vào chuỗi
+SELECT digest('This is some sensitive data', 'sha256');
+SELECT digest('test@example.com', 'md5');
+SELECT encode(digest('test@example.com', 'md5'), 'hex');
+SELECT encode(digest('This is some sensitive data', 'sha256'), 'hex');
+- 16 Không nên làm trong PostgreSQL
+Tuyệt đối! Dưới đây là bản tóm tắt đầy đủ và chi tiết của các ý trong trang Wiki "Don't Do This" về những điều nên tránh khi làm việc với PostgreSQL, đã được dịch sang tiếng Việt:
+
+Mã hóa Cơ sở Dữ liệu (Database Encoding)
+
+Không dùng SQL_ASCII:
+
+SQL_ASCII coi dữ liệu như một chuỗi byte mà không thực hiện bất kỳ chuyển đổi mã hóa nào. Điều này dẫn đến tình trạng cơ sở dữ liệu chứa hỗn hợp nhiều mã hóa khác nhau, gây khó khăn cho việc khôi phục ký tự gốc một cách đáng tin cậy.
+
+Khi nào nên dùng? Chỉ khi dữ liệu đầu vào đã là một mớ hỗn độn các mã hóa không rõ ràng (ví dụ: log kênh IRC, email không tuân thủ MIME) và như một biện pháp cuối cùng. Tuy nhiên, hãy cân nhắc sử dụng bytea trước hoặc thử tự động phát hiện UTF8 và giả định các dữ liệu không phải UTF8 thuộc một mã hóa cụ thể (ví dụ: WIN1252).
+
+Sử dụng Công cụ (Tool Usage)
+
+Không dùng psql -W hoặc --password:
+
+Các tùy chọn này khiến psql luôn hỏi mật khẩu trước khi kết nối, ngay cả khi máy chủ không yêu cầu.
+
+Điều này không cần thiết vì psql sẽ tự động hỏi mật khẩu nếu máy chủ yêu cầu. Việc sử dụng -W có thể gây nhầm lẫn khi thiết lập quyền và có thể khiến bạn nghĩ rằng cần mật khẩu khi thực tế không phải. Bạn cũng có thể nghĩ mình đã nhập đúng mật khẩu khi thực tế không phải vậy, gây ra vấn đề khi kết nối từ các client khác.
+
+Khi nào nên dùng? Gần như không bao giờ. Nó có thể giúp tiết kiệm một lượt giao tiếp với máy chủ, nhưng lợi ích này không đáng so với những rủi ro và nhầm lẫn có thể xảy ra.
+
+Cấu trúc SQL (SQL Constructs)
+
+Không dùng Rules:
+
+Rules (luật) rất mạnh mẽ nhưng hoạt động không như vẻ ngoài của chúng. Chúng không phải là logic điều kiện mà thực tế là viết lại truy vấn để sửa đổi hoặc thêm các truy vấn khác.
+
+Hầu hết các rule phức tạp đều không chính xác.
+
+Khi nào nên dùng? Không bao giờ. Mặc dù bộ viết lại truy vấn là một chi tiết triển khai của Views, không có lý do gì để can thiệp trực tiếp vào nó thông qua Rules. Hãy sử dụng Triggers (bộ kích hoạt) thay thế nếu bạn nghĩ mình cần Rules.
+
+Không dùng Table Inheritance (Kế thừa Bảng):
+
+Table Inheritance là một phần của xu hướng liên kết chặt chẽ cơ sở dữ liệu với mã hướng đối tượng, nhưng hóa ra việc liên kết quá chặt chẽ không mang lại kết quả mong muốn.
+
+Khi nào nên dùng? Gần như không bao giờ. Với việc phân vùng bảng (table partitioning) đã được hỗ trợ trực tiếp, trường hợp sử dụng phổ biến nhất của Table Inheritance đã được thay thế bằng một tính năng gốc mạnh mẽ hơn. Một ngoại lệ rất hiếm hoi có thể là khi sử dụng extension temporal_tables để theo dõi lịch sử phiên bản của các hàng khi không có hỗ trợ SQL 2011. Ngay cả trong trường hợp này, bạn cũng nên cẩn trọng với những hạn chế khi làm việc với bảng cha. Hãy sử dụng Foreign Keys (khóa ngoại) thay thế nếu bạn nghĩ mình cần Table Inheritance.
+
+Không dùng NOT IN (hoặc bất kỳ tổ hợp NOT và IN nào):
+
+Lý do 1: Hành vi bất ngờ với NULL:
+
+SELECT * FROM foo WHERE col NOT IN (1, NULL); luôn trả về 0 hàng.
+
+SELECT * FROM foo WHERE foo.col NOT IN (SELECT bar.x FROM bar); trả về 0 hàng nếu bất kỳ giá trị nào của bar.x là NULL.
+
+Điều này xảy ra vì col IN (1, NULL) trả về TRUE nếu col=1 và NULL trong các trường hợp khác (không bao giờ trả về FALSE). NOT (TRUE) là FALSE, nhưng NOT (NULL) vẫn là NULL, do đó NOT (col IN (1, NULL)) không bao giờ có thể trả về TRUE.
+
+Lý do 2: Hiệu suất kém: Do hành vi với NULL, NOT IN (SELECT ...) thường không được tối ưu hóa tốt. Planner không thể chuyển nó thành anti-join, dẫn đến việc sử dụng Hashed Subplan (nhanh cho tập kết quả nhỏ) hoặc Plain Subplan (rất chậm, O(N²)). Hiệu suất có thể tốt trong thử nghiệm nhỏ nhưng giảm đáng kể khi vượt qua một ngưỡng kích thước nhất định.
+
+Giải pháp thay thế: Trong hầu hết các trường hợp, hành vi NULL của NOT IN (SELECT ...) không mong muốn. Hãy viết lại truy vấn bằng NOT EXISTS (SELECT ...):
+SELECT * FROM foo WHERE NOT EXISTS (SELECT FROM bar WHERE foo.col = bar.x);
+
+Khi nào nên dùng? NOT IN (list, of, values, ...) thường an toàn trừ khi danh sách có thể chứa NULL (thông qua tham số hoặc cách khác). Đôi khi nó tự nhiên và hợp lý khi loại trừ các giá trị hằng cụ thể khỏi kết quả truy vấn.
+
+Không dùng tên bảng hoặc cột viết hoa (Upper Case):
+
+Hãy dùng names_like_this thay vì NamesLikeThis.
+
+PostgreSQL tự động chuyển đổi tất cả tên (bảng, cột, hàm, v.v.) thành chữ thường trừ khi chúng được đặt trong dấu ngoặc kép.
+
+CREATE TABLE Foo() sẽ tạo bảng tên foo, trong khi CREATE TABLE "Bar"() sẽ tạo bảng tên Bar.
+
+Các lệnh SELECT * FROM Foo, SELECT * FROM foo, SELECT * FROM "Bar" sẽ hoạt động.
+
+Các lệnh SELECT * FROM "Foo", SELECT * FROM Bar, SELECT * FROM bar sẽ thất bại với lỗi "no such table".
+
+Việc sử dụng chữ hoa buộc bạn phải luôn đặt tên trong dấu ngoặc kép hoặc không bao giờ, gây khó chịu khi thao tác thủ công và đặc biệt khi sử dụng các công cụ khác nhau có cách xử lý dấu ngoặc kép khác nhau.
+
+Lời khuyên: Hãy sử dụng a-z, 0-9 và dấu gạch dưới cho tên để không bao giờ phải lo lắng về việc đặt dấu ngoặc kép.
+
+Khi nào nên dùng? Nếu việc hiển thị tên "đẹp" trong báo cáo là quan trọng, bạn có thể cân nhắc. Tuy nhiên, bạn cũng có thể sử dụng bí danh cột (column aliases) để có tên chữ thường trong bảng và vẫn hiển thị tên đẹp trong kết quả truy vấn (ví dụ: SELECT character_name AS "Character Name" FROM foo;).
+
+Không dùng BETWEEN (đặc biệt với timestamps):
+
+BETWEEN sử dụng so sánh khoảng đóng: cả giá trị ở hai đầu của khoảng đều được bao gồm trong kết quả.
+
+Đây là vấn đề đặc biệt với các truy vấn dạng:
+SELECT * FROM blah WHERE timestampcol BETWEEN '2018-06-01' AND '2018-06-08';
+Truy vấn này sẽ bao gồm các kết quả có timestamp chính xác là 2018-06-08 00:00:00.000000, nhưng không bao gồm các timestamp sau đó trong cùng ngày. Điều này có thể dẫn đến việc đếm trùng các bản ghi xảy ra đúng vào nửa đêm.
+
+Thay vào đó, hãy dùng:
+SELECT * FROM blah WHERE timestampcol >= '2018-06-01' AND timestampcol < '2018-06-09'; (Lưu ý thay đổi ngày kết thúc) hoặc AND timestampcol < '2018-06-08'::date + '1 day'::interval
+
+Khi nào nên dùng? BETWEEN an toàn cho các đại lượng rời rạc như số nguyên hoặc ngày tháng, miễn là bạn nhớ rằng cả hai đầu của khoảng đều được bao gồm. Tuy nhiên, nên tránh thói quen sử dụng nó, đặc biệt với timestamps.
+
+Lưu trữ Ngày/Giờ (Date/Time Storage)
+
+Không dùng timestamp (without time zone):
+
+Hãy dùng timestamptz (còn gọi là timestamp with time zone) để lưu trữ timestamps.
+
+timestamptz ghi lại một khoảnh khắc duy nhất trong thời gian. Nó không lưu trữ múi giờ, mà chỉ là một điểm thời gian được mô tả bằng số micro giây kể từ ngày 1 tháng 1 năm 2000 UTC. Bạn có thể chèn giá trị ở bất kỳ múi giờ nào và nó sẽ lưu trữ điểm thời gian tương ứng. Theo mặc định, nó hiển thị thời gian theo múi giờ hiện tại của bạn, nhưng bạn có thể dùng AT TIME ZONE để hiển thị ở các múi giờ khác.
+
+Vì nó lưu trữ một điểm thời gian, nó sẽ xử lý đúng các phép toán liên quan đến timestamps được nhập ở các múi giờ khác nhau, bao gồm cả sự khác biệt do thay đổi giờ mùa hè (daylight saving time).
+
+timestamp (without time zone) chỉ lưu trữ ngày và giờ bạn cung cấp mà không có thông tin về múi giờ. Nó giống như một bức ảnh chụp đồng hồ và lịch hơn là một điểm thời gian thực tế. Do đó, các phép toán giữa các timestamps từ các vị trí khác nhau hoặc giữa các timestamps trong mùa hè và mùa đông có thể cho kết quả sai.
+
+Khi nào nên dùng? Nếu bạn đang xử lý timestamps một cách trừu tượng hoặc chỉ lưu và truy xuất chúng từ ứng dụng mà không thực hiện các phép toán phức tạp, thì timestamp có thể phù hợp.
+
+Không dùng timestamp (without time zone) để lưu trữ thời gian UTC:
+
+Việc lưu trữ giá trị UTC trong cột timestamp without time zone là một thói quen thường thấy từ các cơ sở dữ liệu khác thiếu hỗ trợ múi giờ tốt.
+
+Hãy dùng timestamp with time zone thay thế.
+
+Tại sao không? Vì cơ sở dữ liệu không có cách nào biết rằng UTC là múi giờ dự định cho các giá trị trong cột. Điều này làm phức tạp nhiều phép tính thời gian hữu ích. Ví dụ, "nửa đêm trước đó theo múi giờ của người dùng u.timezone" trở thành một biểu thức rất dài và khó hiểu.
+
+Khi nào nên dùng? Nếu khả năng tương thích với các cơ sở dữ liệu không hỗ trợ múi giờ quan trọng hơn tất cả các cân nhắc khác.
+
+Không dùng timetz:
+
+Bạn có lẽ muốn dùng timestamptz thay thế.
+
+Ngay cả tài liệu hướng dẫn cũng nói rằng nó chỉ được triển khai để tuân thủ tiêu chuẩn SQL.
+
+Kiểu time with time zone được định nghĩa trong tiêu chuẩn SQL, nhưng định nghĩa của nó có những thuộc tính dẫn đến tính hữu dụng đáng ngờ. Trong hầu hết các trường hợp, sự kết hợp của date, time, timestamp without time zone, và timestamp with time zone sẽ cung cấp đầy đủ chức năng ngày/giờ cần thiết cho bất kỳ ứng dụng nào.
+
+Khi nào nên dùng? Không bao giờ.
+
+Không dùng CURRENT_TIME:
+
+Hãy dùng một trong các hàm sau cho phù hợp:
+
+CURRENT_TIMESTAMP hoặc now() nếu bạn muốn timestamp có múi giờ.
+
+LOCALTIMESTAMP nếu bạn muốn timestamp không có múi giờ.
+
+CURRENT_DATE nếu bạn muốn ngày.
+
+LOCALTIME nếu bạn muốn thời gian.
+
+Tại sao không? Vì CURRENT_TIME trả về giá trị kiểu timetz, như đã đề cập ở trên.
+
+Khi nào nên dùng? Không bao giờ.
+
+Không dùng timestamp(0) hoặc timestamptz(0):
+
+Đừng chỉ định độ chính xác, đặc biệt là 0, cho các cột timestamp hoặc khi ép kiểu sang timestamp.
+
+Hãy dùng date_trunc('second', blah) thay thế.
+
+Tại sao không? Vì nó làm tròn phần thập phân thay vì cắt bớt như mọi người mong đợi. Điều này có thể gây ra các vấn đề không mong muốn. Ví dụ, khi bạn lưu now() vào một cột như vậy, bạn có thể đang lưu một giá trị nửa giây trong tương lai.
+
+Khi nào nên dùng? Không bao giờ.
+
+Không dùng +/-HH:mm làm tên Múi giờ dạng text:
+
+PostgreSQL không chấp nhận các offset múi giờ cố định thay cho tên hoặc chữ viết tắt múi giờ ISO. Nếu bạn chỉ định một offset như vậy, nó sẽ được hiểu là một đặc tả múi giờ POSIX tùy chỉnh với thuộc tính không may là giá trị dương dịch về phía tây trong khi giá trị âm dịch về phía đông (quy ước ISO là dịch về phía đông được ký hiệu là âm).
+
+Lưu ý rằng nếu bạn cung cấp một giá trị kiểu interval, quy ước ISO sẽ được áp dụng. Vì vậy, nếu bạn thực sự muốn chỉ định một offset cố định, bạn có thể viết: AT TIME ZONE INTERVAL '04:00'.
+
+Khi nào nên dùng? Một literal timestamptz dạng chuỗi theo định dạng ISO có thể được viết bằng offset có dấu và chiều của dấu sẽ được giải thích theo quy ước ISO. Ví dụ: SELECT '2024-01-31 17:16:25+04'::timestamptz; cho ra kết quả là 1 giờ chiều UTC.
+
+Lưu trữ Văn bản (Text Storage)
+
+Không dùng char(n):
+
+Bạn có lẽ muốn dùng text.
+
+Bất kỳ chuỗi nào bạn chèn vào trường char(n) sẽ được đệm bằng khoảng trắng cho đến độ dài đã khai báo. Điều này có lẽ không phải là điều bạn thực sự muốn.
+
+Tài liệu hướng dẫn nói rằng các giá trị kiểu character được đệm vật lý bằng khoảng trắng đến độ dài n và được lưu trữ và hiển thị theo cách đó. Tuy nhiên, các khoảng trắng ở cuối được coi là không quan trọng về mặt ngữ nghĩa và bị bỏ qua khi so sánh hai giá trị kiểu character. Trong các đối chiếu mà khoảng trắng có ý nghĩa, hành vi này có thể tạo ra kết quả bất ngờ. Các khoảng trắng ở cuối sẽ bị loại bỏ khi chuyển đổi giá trị character sang một trong các kiểu chuỗi khác. Lưu ý rằng các khoảng trắng ở cuối có ý nghĩa về mặt ngữ nghĩa trong các giá trị character varying và text, và khi sử dụng so khớp mẫu (LIKE và regular expressions). Điều này đủ để bạn tránh xa nó.
+
+Việc đệm bằng khoảng trắng gây lãng phí dung lượng và không làm cho các thao tác trên nó nhanh hơn; thực tế ngược lại, do cần phải loại bỏ khoảng trắng trong nhiều ngữ cảnh.
+
+Quan trọng cần lưu ý rằng từ quan điểm lưu trữ, char(n) không phải là kiểu có độ dài cố định. Số byte thực tế thay đổi vì các ký tự có thể chiếm nhiều hơn một byte, và các giá trị được lưu trữ do đó vẫn được coi là có độ dài thay đổi (mặc dù việc đệm khoảng trắng được bao gồm trong lưu trữ).
+
+Khi nào nên dùng? Khi bạn đang chuyển đổi phần mềm rất cũ sử dụng các trường có độ dài cố định. Hoặc khi bạn đọc đoạn trích từ tài liệu hướng dẫn ở trên và nghĩ rằng "vâng, điều đó hoàn toàn hợp lý và phù hợp với yêu cầu của tôi" thay vì hoảng sợ và bỏ chạy.
+
+Không dùng char(n) ngay cả cho các định danh có độ dài cố định:
+
+Đôi khi mọi người phản ứng với "không dùng char(n)" bằng cách nói "nhưng các giá trị của tôi phải luôn có chính xác N ký tự" (ví dụ: mã quốc gia, hash, hoặc định danh từ hệ thống khác). Việc sử dụng char(n) ngay cả trong những trường hợp này vẫn là một ý tưởng tồi.
+
+Hãy dùng text, hoặc một domain trên text, với CHECK(length(VALUE) = 3) hoặc CHECK(VALUE ~ '^[[:alpha:]]{3}$') hoặc tương tự.
+
+Tại sao không? Vì char(n) không từ chối các giá trị quá ngắn, nó chỉ âm thầm đệm chúng bằng khoảng trắng. Vì vậy, không có lợi ích thực sự nào so với việc sử dụng text với một ràng buộc kiểm tra độ dài chính xác. Thêm vào đó, một kiểm tra như vậy cũng có thể xác minh rằng giá trị ở đúng định dạng.
+
+Hãy nhớ rằng không có lợi ích hiệu suất nào khi sử dụng char(n) so với varchar(n). Thực tế thì ngược lại. Một vấn đề cụ thể thường xảy ra là nếu bạn cố gắng so sánh một trường char(n) với một tham số mà driver đã chỉ định rõ ràng kiểu là text hoặc varchar, bạn có thể bất ngờ không thể sử dụng index cho phép so sánh. Điều này có thể khó gỡ lỗi vì nó không hiển thị trong các truy vấn thủ công.
+
+Khi nào nên dùng? Không bao giờ.
+
+Không dùng varchar(n) theo mặc định:
+
+Hãy cân nhắc sử dụng varchar (không giới hạn độ dài) hoặc text thay thế.
+
+varchar(n) là một trường văn bản có độ dài thay đổi và sẽ gây ra lỗi nếu bạn cố gắng chèn một chuỗi dài hơn n ký tự (không phải byte) vào đó.
+
+varchar (không có (n)) hoặc text tương tự, nhưng không có giới hạn độ dài. Nếu bạn chèn cùng một chuỗi vào ba kiểu trường này, chúng sẽ chiếm chính xác cùng một lượng dung lượng và bạn sẽ không thể đo lường bất kỳ sự khác biệt nào về hiệu suất.
+
+Nếu bạn thực sự cần một trường văn bản có giới hạn độ dài, thì varchar(n) rất tốt, nhưng nếu bạn chọn một độ dài tùy ý và chọn varchar(20) cho trường họ, bạn đang mạo hiểm gây ra lỗi sản xuất trong tương lai khi một người có họ dài đăng ký dịch vụ của bạn.
+
+Một số cơ sở dữ liệu không có kiểu có thể chứa văn bản có độ dài tùy ý, hoặc nếu có thì nó không tiện lợi, hiệu quả hoặc được hỗ trợ tốt như varchar(n). Người dùng từ các cơ sở dữ liệu đó thường sử dụng một cái gì đó như varchar(255) khi họ thực sự muốn text.
+
+Nếu bạn cần ràng buộc giá trị trong một trường, bạn có lẽ cần một cái gì đó cụ thể hơn là độ dài tối đa - có thể là độ dài tối thiểu, hoặc một tập hợp ký tự giới hạn - và một ràng buộc CHECK có thể thực hiện tất cả những điều đó cũng như giới hạn độ dài chuỗi tối đa.
+
+Khi nào nên dùng? Khi bạn thực sự muốn. Nếu bạn muốn một trường văn bản sẽ gây ra lỗi nếu bạn chèn một chuỗi quá dài vào đó và bạn không muốn sử dụng một ràng buộc CHECK rõ ràng, thì varchar(n) là một kiểu hoàn toàn tốt. Chỉ là đừng sử dụng nó một cách tự động mà không suy nghĩ. Ngoài ra, kiểu varchar nằm trong tiêu chuẩn SQL, không giống như kiểu text, vì vậy nó có thể là lựa chọn tốt nhất để viết các ứng dụng siêu di động.
+
+Các Kiểu Dữ liệu Khác (Other Data Types)
+
+Không dùng money:
+
+Kiểu dữ liệu money thực sự không tốt lắm để lưu trữ các giá trị tiền tệ. numeric, hoặc (hiếm khi) integer có thể tốt hơn.
+
+Tại sao không? Rất nhiều lý do:
+
+Nó là kiểu fixed-point, được triển khai dưới dạng số nguyên máy, nên các phép toán với nó rất nhanh. Nhưng nó không xử lý các phần nhỏ của xu (hoặc tương đương ở các loại tiền tệ khác), hành vi làm tròn của nó có lẽ không phải là điều bạn muốn.
+
+Nó không lưu trữ đơn vị tiền tệ với giá trị, mà giả định rằng tất cả các cột money đều chứa đơn vị tiền tệ được chỉ định bởi cài đặt locale lc_monetary của cơ sở dữ liệu. Nếu bạn thay đổi cài đặt lc_monetary vì bất kỳ lý do gì, tất cả các cột money sẽ chứa giá trị sai. Điều đó có nghĩa là nếu bạn chèn '$10.00' khi lc_monetary được đặt thành 'en_US.UTF-8', giá trị bạn truy xuất có thể là '10,00 Lei' hoặc '¥1,000' nếu lc_monetary bị thay đổi.
+
+Lưu trữ giá trị dưới dạng numeric, có thể với đơn vị tiền tệ được sử dụng trong một cột liền kề, có thể tốt hơn.
+
+Khi nào nên dùng? Nếu bạn chỉ làm việc với một loại tiền tệ duy nhất, không xử lý các phần nhỏ của xu và chỉ thực hiện phép cộng và phép trừ, thì money có thể là lựa chọn phù hợp.
+
+Không dùng serial:
+
+Đối với các ứng dụng mới, nên sử dụng identity columns (cột định danh) thay thế.
+
+Các kiểu serial có một số hành vi kỳ lạ khiến việc quản lý schema, phụ thuộc và quyền trở nên rườm rà không cần thiết.
+
+Khi nào nên dùng? Nếu bạn cần hỗ trợ các phiên bản PostgreSQL cũ hơn phiên bản 10. Trong một số kết hợp với kế thừa bảng (nhưng hãy xem phần đó). Nói chung, nếu bạn bằng cách nào đó sử dụng cùng một sequence cho nhiều bảng, mặc dù trong những trường hợp đó, việc khai báo rõ ràng có thể được ưu tiên hơn so với các kiểu serial.
+
+Xác thực (Authentication)
+
+Không dùng xác thực trust qua TCP/IP (host, hostssl):
+
+Đặc biệt không đặt một dòng như sau trong tệp pg_hba.conf của bạn:
+host all all 0.0.0.0/0 trust
+Điều này cho phép bất kỳ ai trên Internet xác thực với tư cách bất kỳ người dùng PostgreSQL nào trong cluster của bạn, bao gồm cả superuser PostgreSQL.
+
+Có một danh sách các phương pháp xác thực tốt hơn để thiết lập kết nối từ xa đến PostgreSQL. Việc thiết lập phương pháp xác thực dựa trên mật khẩu khá dễ dàng, với khuyến nghị là scram-sha-256 có sẵn trong PostgreSQL 10 trở lên.
+
+Tại sao không? Tài liệu hướng dẫn nói rằng xác thực trust chỉ phù hợp cho các kết nối TCP/IP nếu bạn tin tưởng mọi người dùng trên mọi máy được phép kết nối đến máy chủ bởi các dòng pg_hba.conf chỉ định trust. Hiếm khi hợp lý khi sử dụng trust cho bất kỳ kết nối TCP/IP nào khác ngoài các kết nối từ localhost (127.0.0.1). Với xác thực trust, bất kỳ người dùng nào cũng có thể tự nhận mình là người dùng khác và PostgreSQL sẽ tin tưởng điều đó. Điều này có nghĩa là ai đó có thể tự nhận là tài khoản superuser postgres và PostgreSQL sẽ chấp nhận yêu cầu đó và cho phép họ đăng nhập. Hơn nữa, cũng không nên cho phép sử dụng xác thực trust trên các kết nối socket UNIX cục bộ trong môi trường production, vì bất kỳ ai có quyền truy cập vào instance đang chạy PostgreSQL đều có thể đăng nhập với tư cách bất kỳ người dùng nào.
+
+Khi nào nên dùng? Câu trả lời ngắn gọn là không bao giờ. Câu trả lời dài hơn là có một vài trường hợp mà xác thực trust có thể phù hợp: chạy thử nghiệm trên máy chủ PostgreSQL như một phần của CI/CD job trên một mạng đáng tin cậy; làm việc trên máy phát triển cục bộ của bạn, nhưng chỉ cho phép các kết nối TCP/IP qua localhost. Nhưng bạn nên xem liệu các phương pháp thay thế có phù hợp hơn với bạn không. Ví dụ, trên các hệ thống dựa trên UNIX, bạn có thể kết nối đến môi trường phát triển cục bộ của mình bằng cách sử dụng xác thực peer.
+
