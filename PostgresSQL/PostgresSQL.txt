@@ -494,4 +494,43 @@ PostgreSQL	MySQL	Chức năng	Độ nhạy chữ hoa
 !~	NOT REGEXP BINARY	Không khớp với biểu thức chính quy	Case-sensitive
 !~*	NOT REGEXP	Không khớp với biểu thức chính quy	Case-insensitive
 - 12 PostgreSQL hiển thị true và false cho kiểu BOOLEAN, trong khi MySQL hiển thị 0 và 1 (vì nó là TINYINT(1)).
-- 13 
+- 13 CREATE TABLE articles (
+article_id SERIAL PRIMARY KEY,
+title VARCHAR(255) NOT NULL,
+content TEXT,
+tags TEXT[]
+);
+
+Ở đây, tags TEXT[] định nghĩa một cột có tên tags là một mảng các chuỗi văn bản.
+Chèn dữ liệu với giá trị mảng:
+INSERT INTO articles (title, content, tags)
+VALUES ('Introduction to Arrays in PostgreSQL', '...', '{"postgres", "arrays", "data modeling"}');
+INSERT INTO articles (title, content, tags)
+VALUES ('Web Development Best Practices', '...', '{"webdev", "practices", "performance", "security"}');
+INSERT INTO articles (title, content, tags)
+VALUES ('Cooking with Spices', '...', '{"cooking", "spices", "recipes"}');
+INSERT INTO articles (title, content, tags)
+VALUES ('Advanced SQL Queries', '...', '{"sql", "postgres", "advanced"}');
+
+Lưu ý cách các giá trị mảng được nhập, thường là trong dấu ngoặc nhọn {} và các phần tử được phân tách bằng dấu phẩy.
+Truy vấn dữ liệu và thao tác với mảng:
+Lấy các bài viết có chứa một thẻ cụ thể (sử dụng toán tử ANY):
+SELECT title, tags
+FROM articles
+WHERE 'postgres' = ANY(tags);
+
+Câu truy vấn này sẽ trả về các bài viết có chứa thẻ 'postgres'.
+Lấy các bài viết có chứa tất cả các thẻ cụ thể (sử dụng toán tử @> - contains):
+SELECT title, tags
+FROM articles
+WHERE tags @> '{"sql", "postgres"}';
+
+Câu truy vấn này sẽ trả về các bài viết chứa cả thẻ 'sql' và 'postgres'.
+Lấy số lượng thẻ cho mỗi bài viết (sử dụng hàm array_length):
+SELECT title, array_length(tags, 1) AS number_of_tags
+FROM articles;
+
+Thêm một thẻ mới vào mảng (sử dụng toán tử || - concatenation):
+UPDATE articles
+SET tags = tags || '{"database"}'
+WHERE title = 'Introduction to Arrays in PostgreSQL';
