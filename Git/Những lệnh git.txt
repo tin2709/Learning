@@ -6,13 +6,16 @@ Nó lặp qua các commit trong một phạm vi nhất định và áp dụng c�
 --index-filter <lệnh>:
 Đây là một trong các bộ lọc của git filter-branch.
 Bộ lọc này hoạt động trực tiếp trên index (còn gọi là staging area) của Git cho mỗi commit mà nó xử lý.
-Nó không checkout (lấy về) toàn bộ cây thư mục làm việc (working directory) cho mỗi commit, điều này làm cho nó nhanh hơn đáng kể so với các bộ lọc khác như --tree-filter khi bạn chỉ cần thao tác với index (ví dụ: xóa tệp).
+Nó không checkout (lấy về) toàn bộ cây thư mục làm việc (working directory) cho mỗi commit, điều này làm cho nó nhanh hơn đáng kể so với các bộ lọc khác như --tree-filter khi bạn chỉ 
+cần thao tác với index (ví dụ: xóa tệp).
 <lệnh> là lệnh shell sẽ được thực thi trên index của mỗi commit.
 'git rm --cached --ignore-unmatch filename':
 Đây là lệnh cụ thể được cung cấp cho --index-filter. Nó sẽ chạy cho mỗi commit trong lịch sử được viết lại.
 git rm: Lệnh Git để xóa tệp.
---cached: Tùy chọn này chỉ xóa tệp khỏi index (staging area) và lịch sử commit, nhưng không xóa nó khỏi thư mục làm việc hiện tại của bạn (nếu nó đang tồn tại). Điều này phù hợp với --index-filter vì nó không làm việc với thư mục làm việc.
---ignore-unmatch: Tùy chọn này rất quan trọng. Nó bảo git rm không báo lỗi và dừng lại nếu tệp filename không tồn tại trong index của một commit cụ thể nào đó (ví dụ: tệp chưa được thêm vào ở commit đó, hoặc đã bị xóa trước đó). Nếu không có tùy chọn này, filter-branch có thể sẽ thất bại giữa chừng.
+--cached: Tùy chọn này chỉ xóa tệp khỏi index (staging area) và lịch sử commit, nhưng không xóa nó khỏi thư mục làm việc hiện tại của bạn (nếu nó đang tồn tại). Điều này phù hợp với 
+--index-filter vì nó không làm việc với thư mục làm việc.
+--ignore-unmatch: Tùy chọn này rất quan trọng. Nó bảo git rm không báo lỗi và dừng lại nếu tệp filename không tồn tại trong index của một commit cụ thể nào đó (ví dụ: tệp chưa được thêm 
+vào ở commit đó, hoặc đã bị xóa trước đó). Nếu không có tùy chọn này, filter-branch có thể sẽ thất bại giữa chừng.
 filename: Tên của tệp cụ thể mà bạn muốn xóa khỏi lịch sử. Bạn cần thay thế filename bằng tên tệp thực tế.
 HEAD:
 Chỉ định phạm vi các commit cần xử lý. HEAD trong ngữ cảnh này thường có nghĩa là xử lý tất cả các commit có thể truy cập được từ commit hiện tại (HEAD) ngược về quá khứ trên nhánh hiện tại. filter-branch sẽ viết lại lịch sử từ commit gốc đầu tiên cho đến HEAD.
@@ -28,3 +31,277 @@ tạp để đồng bộ lại (thường là git fetch và git reset --hard ho�
 Nguy hiểm: filter-branch là một công cụ mạnh nhưng phức tạp và có thể làm mất dữ liệu nếu sử dụng sai. Luôn sao lưu kho của bạn trước khi chạy lệnh này.
 Thay thế được đề xuất: Ngày nay, công cụ git-filter-repo (cần cài đặt riêng) được khuyến nghị mạnh mẽ thay thế cho git filter-branch. Nó an toàn hơn, nhanh hơn và dễ sử dụng hơn nhiều cho 
 các tác vụ viết lại lịch sử.
+
+- 2 Lệnh git add -p <tên_tệp> (hoặc chỉ git add -p để xem xét tất cả các tệp đã thay đổi) cho phép bạn chọn lựa từng phần (hunk) thay đổi trong một tệp để đưa vào khu vực chuẩn bị (staging area), thay vì phải đưa toàn bộ thay đổi của tệp đó vào cùng một lúc.
+Cách hoạt động:
+Phân tích thay đổi: Khi bạn chạy git add -p, Git sẽ quét qua tệp (hoặc các tệp) bạn chỉ định và tìm tất cả các khối thay đổi (thêm dòng, xóa dòng, sửa đổi dòng). Mỗi khối thay đổi liên tục này được gọi là một "hunk".
+Hiển thị từng Hunk: Git sẽ hiển thị lần lượt từng hunk một dưới dạng định dạng diff (tương tự như git diff).
+Hỏi ý kiến người dùng: Dưới mỗi hunk, Git sẽ hiển thị một lời nhắc tương tác, thường là:
+Stage this hunk [y,n,q,a,d,s,e,?]?
+Use code with caution.
+Các tùy chọn tương tác: Bạn cần nhập một trong các ký tự sau và nhấn Enter để quyết định số phận của hunk đó:
+y (yes): Đưa hunk này vào staging area. Git sẽ chuyển sang hunk tiếp theo (nếu có).
+n (no): Không đưa hunk này vào staging area. Git sẽ bỏ qua hunk này và chuyển sang hunk tiếp theo.
+q (quit): Thoát khỏi quá trình add -p. Chỉ những hunk bạn đã chọn y trước đó mới được đưa vào staging area. Những hunk còn lại (bao gồm hunk hiện tại) sẽ không được đưa vào.
+a (all): Đưa hunk này và tất cả các hunk còn lại trong tệp hiện tại vào staging area. Git sẽ chuyển sang tệp tiếp theo (nếu bạn không chỉ định tên tệp cụ thể).
+d (don't stage): Không đưa hunk này và tất cả các hunk còn lại trong tệp hiện tại vào staging area. Git sẽ chuyển sang tệp tiếp theo.
+s (split): Chia hunk hiện tại thành các hunk nhỏ hơn (nếu có thể). Điều này rất hữu ích nếu một hunk chứa nhiều thay đổi không liên quan đến nhau và bạn chỉ muốn đưa một phần nhỏ trong 
+đó vào staging area. Sau khi chia, Git sẽ hiển thị lại các hunk nhỏ hơn để bạn tiếp tục chọn y hoặc n.
+e (edit): Mở trình soạn thảo văn bản mặc định để bạn có thể chỉnh sửa trực tiếp hunk trước khi đưa vào staging area. Bạn có thể xóa các dòng bắt đầu bằng + (dòng thêm vào) mà bạn không 
+muốn stage, hoặc bỏ dấu - ở đầu dòng (dòng xóa đi) để không stage việc xóa dòng đó. Lưu ý: Bạn không nên sửa đổi nội dung khác ngoài việc thêm/bỏ các dòng + / - hoặc thay đổi chúng thành 
+dòng ngữ cảnh (bắt đầu bằng dấu cách). Đây là một tùy chọn nâng cao.
+? (help): Hiển thị danh sách các tùy chọn và giải thích ngắn gọn về chúng.
+Tại sao lại dùng git add -p?
+Tạo các commit nguyên tử (Atomic Commits): Giúp bạn nhóm các thay đổi liên quan logic vào cùng một commit, ngay cả khi chúng nằm trong cùng một tệp với các thay đổi không liên quan khác. 
+Mỗi commit nên đại diện cho một thay đổi logic duy nhất.
+Làm sạch commit: Cho phép bạn loại bỏ các thay đổi thử nghiệm, mã gỡ lỗi (debug code), hoặc các thay đổi tình cờ khác khỏi commit chính thức.
+Review code trước khi commit: Buộc bạn phải xem lại từng phần thay đổi trước khi đưa chúng vào staging area, giúp phát hiện lỗi hoặc những thay đổi không mong muốn.
+Tách các thay đổi lớn: Nếu bạn thực hiện nhiều thay đổi lớn trong một tệp, git add -p giúp bạn chia nhỏ chúng thành các commit dễ quản lý hơn.
+Ví dụ:
+Giả sử bạn sửa lỗi và thêm một tính năng mới trong cùng tệp my_script.py. Bạn muốn tạo hai commit riêng biệt.
+Chạy git add -p my_script.py.
+Git hiển thị hunk chứa phần sửa lỗi. Bạn nhập y.
+Git hiển thị hunk chứa phần tính năng mới. Bạn nhập n.
+Git hiển thị hunk khác (nếu có) hoặc kết thúc.
+Bây giờ, chỉ có phần sửa lỗi nằm trong staging area. Bạn chạy git commit -m "Fix: Sửa lỗi X"
+Sau đó, bạn có thể chạy lại git add my_script.py (hoặc git add -p my_script.py và chọn y cho hunk còn lại) để đưa phần tính năng mới vào staging area.
+Chạy git commit -m "Feat: Thêm tính năng Y"
+Kết quả là bạn có hai commit rõ ràng, tách biệt thay vì một commit lớn khó hiểu.
+
+- 3  phân tích lệnh git filter-branch --prune-empty --subdirectory-filter [subdir] -- [REF] và xem một ví dụ cụ thể.
+
+Mục đích chính:
+
+Lệnh này được thiết kế để trích xuất lịch sử của một thư mục con cụ thể ([subdir]) từ một kho lưu trữ Git hiện có và tạo ra một lịch sử mới mà trong đó, thư mục con đó trở thành thư mục gốc (root) của kho lưu trữ. Nó giữ lại tất cả các commit liên quan đến thư mục con đó, nhưng loại bỏ mọi thứ khác. Kết quả là một kho lưu trữ trông như thể nó chỉ chứa nội dung và lịch sử của thư mục con đó ngay từ đầu.
+
+Giải thích từng phần:
+
+git filter-branch:
+
+Như đã giải thích trước đó, đây là công cụ mạnh mẽ (và tiềm ẩn rủi ro) để viết lại lịch sử commit. Nó lặp qua các commit và áp dụng các bộ lọc được chỉ định.
+
+--prune-empty:
+
+Đây là một tùy chọn quan trọng trong trường hợp này. Sau khi bộ lọc --subdirectory-filter chạy, sẽ có những commit ban đầu chỉ thay đổi các tệp bên ngoài thư mục con mà bạn đang trích xuất.
+
+Khi lịch sử được viết lại và chỉ tập trung vào thư mục con, những commit đó sẽ trở nên trống rỗng (không còn thay đổi nào trong phạm vi thư mục con).
+
+Tùy chọn --prune-empty sẽ xóa bỏ hoàn toàn các commit trống rỗng này khỏi lịch sử mới. Điều này giúp giữ cho lịch sử của kho lưu trữ mới gọn gàng và chỉ chứa các thay đổi thực sự liên quan đến thư mục con đã trích xuất.
+
+--subdirectory-filter [subdir]:
+
+Đây là bộ lọc chính thực hiện công việc trích xuất.
+
+Đối với mỗi commit trong lịch sử được xử lý, bộ lọc này sẽ chỉ giữ lại cây thư mục (tree) tương ứng với [subdir] và làm cho nó trở thành thư mục gốc mới cho commit đó.
+
+Tất cả các tệp và thư mục khác bên ngoài [subdir] trong commit đó sẽ bị loại bỏ.
+
+Bạn cần thay thế [subdir] bằng đường dẫn tương đối đến thư mục con bạn muốn tách ra (ví dụ: src/mylibrary, docs, backend/api).
+
+--:
+
+Dấu hai gạch nối này là một quy ước trong nhiều lệnh Git và shell. Nó dùng để phân tách rõ ràng các tùy chọn/bộ lọc của filter-branch khỏi các đối số tham chiếu (revision arguments).
+
+Điều này đặc biệt hữu ích nếu tên thư mục con ([subdir]) của bạn tình cờ trông giống tên một nhánh hoặc một tùy chọn khác, để tránh nhầm lẫn.
+
+[REF]:
+
+Xác định phạm vi các commit mà filter-branch sẽ xử lý.
+
+HEAD: Xử lý lịch sử của nhánh hiện tại. Đây là trường hợp phổ biến nhất khi bạn muốn tách thư mục con từ nhánh chính hoặc nhánh phát triển hiện tại.
+
+main (hoặc master): Xử lý lịch sử của nhánh main.
+
+--all: Xử lý tất cả các nhánh và thẻ (tags). Hãy thận trọng khi dùng tùy chọn này vì nó sẽ viết lại lịch sử trên tất cả các tham chiếu.
+
+Thường thì bạn sẽ chỉ định tên nhánh mà bạn muốn trích xuất lịch sử từ đó (ví dụ: main).
+
+Tóm lại:
+
+Lệnh này sẽ:
+
+Xem xét lịch sử của các commit được chỉ định bởi [REF].
+
+Đối với mỗi commit, nó sẽ loại bỏ mọi thứ ngoại trừ nội dung của [subdir].
+
+Nó sẽ điều chỉnh lịch sử sao cho nội dung của [subdir] cũ giờ đây nằm ở thư mục gốc.
+
+Nó sẽ xóa các commit trở nên trống rỗng sau quá trình lọc.
+
+Kết quả là một lịch sử commit mới, chỉ chứa các thay đổi liên quan đến [subdir] ban đầu.
+
+Ví dụ rõ ràng:
+
+Giả sử bạn có một kho lưu trữ lớn tên là monorepo với cấu trúc như sau:
+
+monorepo/
+├── project-a/
+│   └── ...
+├── project-b/
+│   └── ...
+├── shared-utils/      <-- Bạn muốn tách thư mục này thành repo riêng
+│   ├── file1.js
+│   └── file2.js
+└── README.md
+
+
+Bạn muốn tạo một kho lưu trữ mới chỉ chứa lịch sử và nội dung của shared-utils.
+
+Các bước thực hiện:
+
+SAO LƯU hoặc CLONE KHO GỐC! Đây là bước cực kỳ quan trọng. KHÔNG BAO GIỜ chạy filter-branch trực tiếp trên kho gốc mà bạn không muốn mất. Cách an toàn nhất là tạo một bản sao (clone):
+
+# Sao chép kho gốc sang một thư mục mới để thực hiện việc tách
+git clone /path/to/your/monorepo shared-utils-new-repo
+cd shared-utils-new-repo
+
+
+Chạy lệnh filter-branch:
+Giả sử bạn muốn tách lịch sử từ nhánh main:
+
+# Thay 'shared-utils' bằng tên thư mục con của bạn
+# Thay 'main' bằng nhánh bạn muốn xử lý (thường là main/master hoặc HEAD)
+git filter-branch --prune-empty --subdirectory-filter shared-utils -- main
+
+
+Lưu ý: Lệnh này có thể mất một lúc đối với các kho lưu trữ lớn.
+
+Kiểm tra kết quả:
+Sau khi lệnh chạy xong, cấu trúc thư mục trong shared-utils-new-repo sẽ trông như sau:
+
+shared-utils-new-repo/
+├── file1.js
+└── file2.js
+
+
+Lịch sử git log bây giờ sẽ chỉ hiển thị các commit đã từng thay đổi các tệp bên trong thư mục shared-utils ban đầu, và các commit trống đã bị loại bỏ. Các đường dẫn tệp trong lịch sử 
+cũng sẽ được cập nhật để phản ánh cấu trúc gốc mới (ví dụ: shared-utils/file1.js sẽ trở thành file1.js).
+
+Dọn dẹp (Quan trọng): filter-branch tạo ra các bản sao lưu của các tham chiếu cũ trong refs/original/. Để hoàn tất quá trình và giải phóng dung lượng, bạn nên chạy các lệnh dọn dẹp:
+
+# Xóa các tham chiếu gốc cũ mà filter-branch đã tạo
+git for-each-ref --format="%(refname)" refs/original/ | xargs -n 1 git update-ref -d
+
+# Hết hạn reflog và thu gom rác để loại bỏ các đối tượng cũ không thể truy cập
+git reflog expire --expire=now --all
+git gc --prune=now --aggressive
+
+
+Cập nhật: Một cách đơn giản hơn để dọn dẹp sau filter-branch là reset lại HEAD và sau đó chạy gc:
+
+git reset --hard
+# Xóa ref gốc
+git for-each-ref --format='delete %(refname)' refs/original | git update-ref --stdin
+# Dọn dẹp
+git reflog expire --expire=now --all
+git gc --prune=now
+
+
+Push lên kho lưu trữ mới:
+Bây giờ, thư mục shared-utils-new-repo là một kho lưu trữ Git độc lập, sạch sẽ. Bạn có thể tạo một kho lưu trữ mới trên GitHub/GitLab/Bitbucket và push lịch sử đã được lọc này lên:
+
+# Thêm remote mới (thay URL bằng URL kho mới của bạn)
+git remote add origin git@github.com:your-username/shared-utils-new-repo.git
+
+# Push tất cả các nhánh và thẻ đã được viết lại (sử dụng --force hoặc --mirror nếu cần)
+# Cẩn thận với force push nếu đây là repo đã tồn tại
+git push -u origin --all
+git push -u origin --tags
+
+
+Cảnh báo:
+
+Viết lại lịch sử: Lệnh này thay đổi SHA-1 hash của các commit. Nếu kho gốc đã được chia sẻ, việc này sẽ gây rắc rối cho những người khác. Đây là lý do tại sao bạn nên thực hiện trên một 
+bản clone và push kết quả lên một kho lưu trữ hoàn toàn mới.
+
+Công cụ thay thế: Như đã đề cập, git-filter-repo là công cụ hiện đại, an toàn hơn và thường nhanh hơn được khuyên dùng thay cho git filter-branch cho các tác vụ như thế này. Nếu có thể, 
+hãy cân nhắc sử dụng nó.
+
+- 4. Dựa trên bản tóm tắt chi tiết từ video, đây là tổng hợp về lệnh git ls-files:
+
+Mục đích chính:
+
+Lệnh git ls-files là một công cụ của Git dùng để liệt kê các tệp bên trong kho lưu trữ dựa trên trạng thái của chúng đối với Git. Nó giúp người dùng xem và quản lý các tệp mà Git đang 
+theo dõi, những tệp bị bỏ qua, và những tệp chưa được theo dõi.
+
+Các chức năng và tùy chọn chính được đề cập:
+
+Liệt kê tệp được theo dõi (Tracked Files):
+
+Khi chạy git ls-files không có tùy chọn, nó sẽ liệt kê tất cả các tệp hiện đang được Git theo dõi trong chỉ mục (index/staging area), tức là những tệp sẽ được bao gồm trong 
+commit tiếp theo hoặc đã có trong lịch sử. 
+
+Điều này bao gồm cả tệp mã nguồn và các tệp ẩn (ví dụ: .gitignore) nếu chúng được theo dõi. 
+
+Liệt kê tệp bị bỏ qua (Ignored Files):
+
+Sử dụng tùy chọn (thường là -i hoặc --ignored), git ls-files có thể hiển thị danh sách các tệp bị Git bỏ qua theo quy tắc trong tệp .gitignore hoặc cấu hình exclude khác. 
+
+Điều này hữu ích để kiểm tra xem các quy tắc bỏ qua có hoạt động như mong đợi không.
+
+Kết hợp với các mẫu loại trừ (exclude patterns), bạn có thể lọc danh sách này hơn nữa. 
+
+Liệt kê tệp không được theo dõi (Untracked Files):
+
+Sử dụng tùy chọn (thường là -o hoặc --others), lệnh này liệt kê các tệp tồn tại trong thư mục làm việc nhưng không được Git theo dõi và cũng không bị bỏ qua. 
+
+Điều này giúp xác định các tệp mới hoặc tệp được tạo ra mà có thể cần được thêm vào kho lưu trữ hoặc vào .gitignore.
+
+Các tùy chọn và khả năng khác:
+
+Xem tài liệu: Có thể xem hướng dẫn chi tiết với git ls-files --help hoặc man git-ls-files. 
+Sử dụng mẫu (Patterns): Có thể kết hợp các tùy chọn với các mẫu đường dẫn để chỉ liệt kê các tệp khớp với mẫu đó. 
+
+Phân biệt trạng thái: Lệnh giúp phân biệt rõ ràng giữa các trạng thái khác nhau của tệp trong Git (tracked, ignored, untracked). (
+Các trường hợp sử dụng hữu ích:
+
+Kiểm tra trạng thái kho lưu trữ: Nhanh chóng xem những tệp nào là một phần của kho lưu trữ.
+
+Debug .gitignore: Kiểm tra xem tệp nào đang bị bỏ qua và liệu các quy tắc có đúng không.
+
+Dọn dẹp kho lưu trữ: Xác định các tệp không được theo dõi hoặc không mong muốn trong thư mục làm việc. ([Video Title Summary])
+
+Scripting: Output của git ls-files dễ dàng được sử dụng trong các script tự động hóa (ví dụ: đếm số lượng tệp, chuyển danh sách tệp cho lệnh khác). 
+
+Hiểu cấu trúc dự án: Khi tham gia một dự án mới, dùng ls-files với các tùy chọn khác nhau giúp hiểu nhanh những loại tệp nào được theo dõi, bỏ qua (như tệp build, log) và 
+quy trình làm việc chung. 
+
+Kiểm tra tệp nhị phân: Xác định xem có tệp nhị phân nào vô tình được theo dõi hay không (thường không nên commit tệp nhị phân là kết quả build). 
+
+Tóm lại:
+
+Mặc dù git status thường được sử dụng hàng ngày để xem các thay đổi, git ls-files cung cấp một cái nhìn chi tiết hơn về bản thân các tệp và trạng thái quản lý của chúng bởi 
+Git (tracked, ignored, untracked). Nó là một công cụ mạnh mẽ, đặc biệt hữu ích cho việc kiểm tra sâu, scripting, và quản lý kho lưu trữ trong các tình huống cụ thể, thay vì chỉ xem các 
+thay đổi chưa được commit.
+
+- 5  điểm chính về lệnh git rebase -i (Interactive Rebase) được trình bày trong video:
+Mục đích: git rebase -i là một công cụ mạnh mẽ để viết lại lịch sử commit cục bộ (local history) một cách có kiểm soát, giúp làm sạch, sắp xếp lại, hoặc chỉnh sửa các commit trước khi chia sẻ chúng.
+Cách hoạt động:
+Chạy git rebase -i <commit-base> sẽ mở một trình soạn thảo văn bản.
+Trình soạn thảo liệt kê các commit từ <commit-base> đến commit hiện tại (HEAD), thứ tự ngược lại so với git log (commit cũ nhất ở trên cùng).
+Bạn thay đổi lệnh đứng trước mỗi commit (mặc định là pick) để chỉ định hành động mong muốn cho commit đó.
+Các tùy chọn (lệnh) chính:
+reword (hoặc r): Giữ nguyên commit nhưng cho phép chỉnh sửa lại thông điệp commit.
+squash (hoặc s): Gộp commit này vào commit trước đó. Git sẽ mở trình soạn thảo để bạn kết hợp và chỉnh sửa thông điệp của cả hai commit thành một thông điệp mới.
+fixup (hoặc f): Tương tự squash, gộp commit này vào commit trước đó, nhưng loại bỏ hoàn toàn thông điệp của commit hiện tại, chỉ giữ lại thông điệp của commit trước đó.
+edit (hoặc e): Dừng quá trình rebase tại commit này, cho phép bạn thay đổi nội dung (code) của commit, không chỉ thông điệp. Sau khi sửa đổi, bạn cần git add và git commit --amend trước 
+khi tiếp tục.
+exec (hoặc x): Thực thi một lệnh shell ngay sau khi áp dụng commit trước đó. Rất hữu ích để chạy các bài kiểm tra (tests) hoặc build dự án giữa các bước rebase để đảm bảo không có lỗi 
+nào được đưa vào trong quá trình viết lại lịch sử.
+drop (hoặc d): Xóa bỏ hoàn toàn commit này.
+Quy trình thực hiện:
+Chọn các hành động (lệnh) trong trình soạn thảo và lưu lại.
+Git sẽ thực hiện các hành động tuần tự.
+Nếu có xung đột (conflict) hoặc bạn dùng lệnh edit, rebase sẽ dừng lại. Bạn cần giải quyết xung đột, git add, và có thể git commit --amend.
+Sử dụng git rebase --continue để tiếp tục quá trình sau khi giải quyết xong hoặc hoàn thành edit.
+Sử dụng git rebase --abort để hủy bỏ hoàn toàn quá trình rebase và quay lại trạng thái ban đầu.
+Cảnh báo quan trọng:
+CHỈ NÊN REBASE CÁC COMMIT CỤC BỘ CHƯA ĐƯỢC CHIA SẺ (chưa push lên remote chung). Việc rebase các commit đã được push sẽ thay đổi lịch sử, gây ra các vấn đề nghiêm trọng khi người khác 
+pull code về.
+Rebase viết lại lịch sử, tạo ra các commit mới với ID (SHA-1) khác.
+Lợi ích:
+Tạo ra một lịch sử commit sạch sẽ, logic và dễ hiểu hơn trước khi gộp (merge) vào nhánh chính hoặc chia sẻ.
+Giúp nhóm các thay đổi liên quan vào một commit duy nhất.
+Sửa lỗi hoặc cập nhật trong các commit cũ hơn một cách dễ dàng.
+Tóm lại, git rebase -i là một công cụ linh hoạt để tinh chỉnh lịch sử commit cục bộ, với các tùy chọn như sửa đổi thông điệp, gộp commit, sửa đổi nội dung, và thậm chí chạy lệnh kiểm tra, 
+nhưng cần sử dụng cẩn thận, đặc biệt là với các commit đã được chia sẻ.
