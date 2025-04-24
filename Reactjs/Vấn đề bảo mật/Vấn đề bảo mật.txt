@@ -1,0 +1,5 @@
+- 1 React mặc định bảo vệ bạn khỏi XSS khi bạn render dữ liệu dưới dạng chuỗi thông thường (ví dụ: <div>{userData}</div>), 
+vì nó sẽ tự động escape các ký tự đặc biệt.
+Khi bạn cần render một chuỗi dưới dạng HTML thực thụ (ví dụ: từ một trình soạn thảo WYSIWYG), hãy dùng dangerouslySetInnerHTML.
+Quan trọng nhất: Luôn luôn sử dụng một thư viện sanitization như DOMPurify để làm sạch chuỗi HTML đó trước khi đưa vào dangerouslySetInnerHTML.
+Tuyệt đối tránh thao tác DOM trực tiếp bằng ref.current.innerHTML = ... để chèn HTML từ nguồn không đáng tin cậy.
