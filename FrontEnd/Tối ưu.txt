@@ -1,0 +1,28 @@
+- 1 khái niệm Reflow, Repaint, và Layout Shift, nhấn mạnh tầm quan trọng của việc tối ưu để tránh Layout Shift (CLS) cao, một trong các 
+chỉ số quan trọng của Core Web Vitals.
+Reflow (hay Layout):
+Là quá trình trình duyệt tính toán lại vị trí và kích thước (geometry) của các phần tử trên trang.
+Xảy ra khi có thay đổi cấu trúc DOM (thêm/xóa element) hoặc thay đổi thuộc tính ảnh hưởng đến layout (kích thước, vị trí, font chữ, 
+nội dung text, kích thước cửa sổ...).
+Là quá trình tốn kém tài nguyên vì có thể ảnh hưởng đến toàn bộ hoặc một phần lớn trang. Reflow thường kéo theo Repaint.
+Repaint (hay Redraw):
+Là quá trình trình duyệt vẽ lại các điểm ảnh (pixels) của các phần tử lên màn hình mà không thay đổi layout.
+Xảy ra khi có thay đổi về giao diện nhưng không ảnh hưởng vị trí/kích thước (ví dụ: background-color, visibility, outline, color).
+Ít tốn kém hơn Reflow, nhưng nếu xảy ra liên tục cũng ảnh hưởng hiệu năng.
+Layout Shift:
+Là hiện tượng các phần tử nhìn thấy được trên trang bị dịch chuyển vị trí một cách bất ngờ sau khi chúng đã được hiển thị ban đầu.
+Gây trải nghiệm người dùng tệ (ví dụ: bấm nhầm nút do nút bị dịch chuyển).
+Được đo lường bằng chỉ số Cumulative Layout Shift (CLS) trong Core Web Vitals. CLS càng thấp càng tốt.
+Về bản chất, Layout Shift xảy ra do các hoạt động gây Reflow diễn ra muộn, sau khi trang đã hiển thị một phần cho người dùng.
+Nguyên nhân chính gây Layout Shift:
+Hình ảnh, video không có kích thước (width, height): Trình duyệt không biết dành bao nhiêu không gian cho đến khi media tải xong.
+Quảng cáo (Ads), Embeds, Iframes không có kích thước: Tương tự hình ảnh, chiếm không gian sau khi tải.
+Nội dung được chèn động (Dynamic Content): Thêm nội dung (đặc biệt là phía trên nội dung cũ) làm đẩy các phần tử khác xuống.
+Web Fonts gây FOIT/FOUT: Font chữ tải về làm thay đổi kích thước text, gây Reflow.
+Hành động đợi phản hồi mạng mới cập nhật DOM: Thay đổi layout sau khi nhận dữ liệu từ server.
+Cách tối ưu để tránh CLS cao:
+Chỉ định kích thước cho hình ảnh/video: Dùng thuộc tính width, height hoặc CSS aspect-ratio.
+Dành sẵn không gian cho Ads, Embeds, Iframes: Sử dụng div với kích thước cố định hoặc placeholder. Tránh chèn quảng cáo lên đầu nội dung hiện có.
+Quản lý Nội dung động: Tránh chèn nội dung mới phía trên nội dung cũ (trừ khi là phản hồi trực tiếp từ hành động người dùng). Sử dụng placeholder hoặc skeleton screen.
+Tối ưu Web Fonts: Sử dụng font-display: optional hoặc swap (cẩn thận với độ dịch chuyển), preload font (<link rel="preload">).
+Sử dụng Animation/Transition đúng cách: Ưu tiên dùng thuộc tính transform (scale, translate) thay vì các thuộc tính gây reflow (như top, left, width, height).
