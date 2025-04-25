@@ -1,0 +1,16 @@
+- 1 Những điểm chính về Signed URL (đặc biệt trong ngữ cảnh Cloudinary):
+Mục đích chính: Cấp quyền truy cập tạm thời và an toàn vào các tài nguyên riêng tư (private) hoặc được bảo vệ mà không cần làm chúng công khai (public).
+Cơ chế hoạt động:
+Là một URL thông thường được bổ sung thêm các tham số đặc biệt, quan trọng nhất là chữ ký số (signature) và thời gian hết hạn (expiration time).
+Chữ ký được tạo ra ở phía server (ví dụ: ứng dụng Spring Boot của bạn) bằng cách sử dụng API Secret của Cloudinary và các thông tin khác của URL (như public ID, resource type, transformations, thời gian hết hạn).
+Bảo mật:
+Không lộ API Secret: API Secret chỉ được dùng ở server để tạo chữ ký, không bao giờ gửi đến client.
+Chống giả mạo/sửa đổi: Chữ ký đảm bảo rằng các tham số trong URL (như public ID, thời gian hết hạn) không bị thay đổi sau khi URL được tạo ra. Cloudinary sẽ từ chối truy cập nếu chữ ký không khớp.
+Giới hạn thời gian: URL chỉ có hiệu lực cho đến thời điểm hết hạn được chỉ định, giảm thiểu rủi ro nếu URL bị lộ.
+Kiểm soát truy cập: Cho phép kiểm soát chi tiết quyền truy cập vào từng tài nguyên cụ thể cho một khoảng thời gian nhất định.
+Phía Client: Client (trình duyệt, ứng dụng di động) chỉ cần sử dụng URL được cung cấp như một URL bình thường để truy cập tài nguyên (ví dụ: trong thẻ <img>, <video>). Client không cần biết về API Secret hay quá trình tạo chữ ký.
+Phía Dịch vụ (Cloudinary): Khi nhận được yêu cầu với Signed URL, Cloudinary sẽ:
+Kiểm tra xem URL đã hết hạn chưa.
+Sử dụng API Secret (mà nó biết) để tự tính lại chữ ký dựa trên các tham số trong URL.
+So sánh chữ ký tự tính với chữ ký được cung cấp trong URL.
+Nếu cả hai khớp và URL chưa hết hạn, Cloudinary sẽ cấp quyền truy cập vào tài nguyên.
