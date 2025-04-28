@@ -12,3 +12,4 @@
 
 7 https://downgit.github.io/#/home : dowload một phần nào đó trong git repo
 
+8 https://app.napkin.ai/ : AI tạo infographic cho nội dung
