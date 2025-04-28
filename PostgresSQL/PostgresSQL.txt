@@ -5,6 +5,7 @@ CREATE TABLE books (
     title VARCHAR(255),
     attr hstore 
 );
+
 - 1.1 Kiểu hstore lưu giá trị theo kiểu key => value: INSERT INTO books (title, attr)
 VALUES
 (
@@ -17,6 +18,7 @@ VALUES
 ),
 Chọn ra key muốn lấy value :SELECT attr -> 'ISBN-13' AS isbn
 FROM books;
+
 - 1.2 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE users (
 user_id SERIAL PRIMARY KEY,
@@ -25,9 +27,11 @@ email VARCHAR(100) UNIQUE NOT NULL,
 registration_uuid UUID DEFAULT gen_random_uuid(),
 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 Extension uuid-ossp cung cấp các hàm để tạo UUID (Universally Unique Identifier), bao gồm gen_random_uuid()
+
 - 1.3 pg_stat_statements là một extension rất hữu ích cung cấp thống kê về việc thực thi tất cả các câu lệnh SQL đã được thực hiện bởi máy chủ PostgreSQL
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 SELECT count(*) FROM pg_stat_statements;
+
 - 1.4 Sử dụng Extension pg_cron:
 Đây là cách gần giống nhất với MySQL Events về mặt quản lý bên trong cơ sở dữ liệu.
 pg_cron là một extension (phần mở rộng) bạn cần cài đặt và kích hoạt.
@@ -37,6 +41,7 @@ Ví dụ: Lên lịch chạy một function my_nightly_job() vào 3:30 sáng hà
 SELECT cron.schedule('nightly-job', '30 3 * * *', 'SELECT my_nightly_job()');
 
 Đây thường là lựa chọn ưu tiên nếu bạn muốn quản lý lịch trình hoàn toàn bằng SQL và tác vụ chỉ liên quan đến cơ sở dữ liệu.
+
 - 2 Giả sử chúng ta có bảng sales với các cột brand, segment, và quantity như sau:
 
 brand	segment	quantity
@@ -140,6 +145,7 @@ Lưu ý về MySQL:
 Thứ tự các hàng trong kết quả của MySQL có thể khác với PostgreSQL vì UNION ALL không duy trì thứ tự. Nếu bạn cần một thứ tự cụ thể, bạn có thể thêm mệnh đề ORDER BY vào từng câu lệnh SELECT và có thể thêm một cột phụ để chỉ định loại nhóm trước khi UNION ALL để có thể sắp xếp kết quả cuối cùng. 
 Tuy nhiên, điều này làm tăng thêm sự phức tạp cho câu lệnh.
 Ví dụ này làm rõ cách GROUPING SETS trong PostgreSQL cho phép bạn định nghĩa nhiều cách nhóm dữ liệu trong một truy vấn duy nhất, tạo ra một tập kết quả tổng hợp đa chiều. Nó cũng minh họa cách bạn có thể đạt được kết quả tương tự trong MySQL bằng cách sử dụng UNION ALL và nhiều câu lệnh GROUP BY riêng biệt.
+
 - 3 Tuyệt vời, dựa trên hướng dẫn về CUBE trong PostgreSQL từ link bạn cung cấp, đây là ví dụ cụ thể với dữ liệu mẫu cho bảng sales và kết quả của câu lệnh SELECT ... GROUP BY CUBE(...).
 
 Dữ liệu mẫu cho bảng sales:
@@ -198,6 +204,7 @@ Lưu ý:
 Trong kết quả, bạn sẽ thấy các hàng có giá trị NULL ở các cột nhóm. NULL ở đây không có nghĩa là giá trị thực tế là null trong dữ liệu gốc, mà nó biểu thị rằng hàng đó là kết quả của việc tổng hợp trên các nhóm mà cột đó không được xem xét (ví dụ: hàng Apple | NULL | 230 là tổng của tất cả các segment cho brand Apple).
 
 ORDER BY brand, segment được thêm vào chỉ để làm cho kết quả dễ đọc và hiểu hơn.
+
 - 4  SELECT brand, segment, SUM (quantity) FROM sales GROUP BY ROLLUP (brand, segment) ORDER BY brand, segment NULLS FIRST; 
 Kết quả trong PostgreSQL:
 brand	segment	sum
@@ -219,6 +226,7 @@ Tổng hợp toàn bộ: () - bỏ qua tất cả các cột được liệt kê
 Lưu ý quan trọng về thứ tự: Thứ tự của các cột trong mệnh đề ROLLUP rất quan trọng. ROLLUP (brand, segment) sẽ tạo ra các tổng hợp theo thứ tự: (brand, segment), (brand), và (). 
 Nếu bạn đổi thứ tự thành ROLLUP (segment, brand), các tổng hợp sẽ theo (segment, brand), (segment), và ().
 ROLLUP trong PostgreSQL và WITH ROLLUP trong MySQL đều cung cấp khả năng tạo các hàng tổng hợp theo một thứ bậc xác định bởi thứ tự các cột trong mệnh đề GROUP BY.
+
 - 5 Giả sử chúng ta có hai bảng:
 
 Bảng products:
@@ -284,6 +292,7 @@ PostgreSQL và MySQL đều hỗ trợ việc cập nhật dữ liệu trong m�
 PostgreSQL sử dụng cú pháp UPDATE target_table SET ... FROM joined_table WHERE join_condition.
 
 MySQL sử dụng cú pháp UPDATE target_table INNER JOIN joined_table ON join_condition SET ....
+
 - 6 Dữ liệu mẫu:
 
 Giả sử chúng ta có bảng inventory với các cột product_id, quantity, và last_updated:
@@ -400,6 +409,7 @@ Kết luận:
 PostgreSQL cung cấp cú pháp INSERT ... ON CONFLICT ... DO NOTHING/UPDATE cho thao tác UPSERT, là một phần của chuẩn SQL gần đây.
 
 MySQL cung cấp INSERT IGNORE INTO cho hành vi "insert or do nothing" và INSERT ... ON DUPLICATE KEY UPDATE cho hành vi "insert or update" dựa trên khóa UNIQUE hoặc PRIMARY KEY.
+
 - 7.1 TEMPORARY TABLE AS SELECT là gì?
 📌 Khái niệm:
 Tạo một bảng tạm thời từ một truy vấn SELECT.
@@ -434,6 +444,7 @@ Tạm thời lưu dữ liệu cho báo cáo
 Phân tích log, audit tạm
 CREATE UNLOGGED TABLE fast_buffer AS
 SELECT * FROM big_table WHERE status = 'active';
+
 - 8 GENERATED ALWAYS AS IDENTITY mà không có tùy chọn nào khác, nó sẽ bắt đầu từ 1 và tăng dần 1.
 CREATE TABLE products (
     id INT GENERATED ALWAYS AS IDENTITY,
@@ -449,6 +460,7 @@ CREATE TABLE categories (
  100 | Electronics
  110 | Books
 (2 rows)
+
 - 9 Composite Type:
 CREATE TYPE address AS (
     street VARCHAR(100),
@@ -469,6 +481,7 @@ CREATE TABLE customers (
 );
 PostgreSQL cung cấp một hệ thống mạnh mẽ cho việc định nghĩa các kiểu dữ liệu do người dùng, bao gồm Composite Types, Enum Types và Domain Types.
 MySQL có hỗ trợ cho Enum Types và Set Types
+
 - 10.1 SELECT 
     brand, 
     segment, 
@@ -478,10 +491,12 @@ MySQL có hỗ trợ cho Enum Types và Set Types
     END AS quantity_int
 FROM sales;
 Lệnh này chỉ ép kiểu thành INTEGER nếu quantity chỉ chứa các chữ số (được kiểm tra bằng biểu thức chính quy ^[0-9]+$). Nếu không, nó sẽ trả về NULL.
+
 - 11 SELECT attr -> 'publisher'
 FROM books
 WHERE attr -> 'publisher' ILIKE '%bantam%';
 ILIKE '%bantam%': Thực hiện so sánh không phân biệt chữ hoa chữ thường để xem giá trị đã trích xuất có chứa chuỗi "bantam" hay không (sử dụng ký tự % làm ký tự đại diện cho bất kỳ chuỗi ký tự nào).
+
 - 10.2 SELECT attr -> 'weight'
 FROM books
 WHERE (attr -> 'weight') IS DISTINCT FROM '13.2 ounces';
@@ -490,6 +505,7 @@ FROM books
 WHERE (attr -> 'weight') IS NOT DISTINCT FROM '13.2 ounces';
 IS DISTINCT FROM trả về TRUE nếu hai giá trị khác nhau (bao gồm cả trường hợp một trong hai là NULL).
 IS NOT DISTINCT FROM trả về TRUE nếu hai giá trị bằng nhau (bao gồm cả trường hợp cả hai đều là NULL).
+
 - 11 PostgreSQL:
 Case-sensitive: SELECT * FROM books WHERE title ~ 'Win.*er';
 Case-insensitive: SELECT * FROM books WHERE title ~* 'win.*er';
@@ -505,6 +521,7 @@ PostgreSQL	MySQL	Chức năng	Độ nhạy chữ hoa
 ~*	REGEXP	Khớp với biểu thức chính quy	Case-insensitive
 !~	NOT REGEXP BINARY	Không khớp với biểu thức chính quy	Case-sensitive
 !~*	NOT REGEXP	Không khớp với biểu thức chính quy	Case-insensitive
+
 - 12 PostgreSQL hiển thị true và false cho kiểu BOOLEAN, trong khi MySQL hiển thị 0 và 1 (vì nó là TINYINT(1)).
 
 - 13.1 CREATE TABLE articles (
@@ -547,6 +564,7 @@ Thêm một thẻ mới vào mảng (sử dụng toán tử || - concatenation):
 UPDATE articles
 SET tags = tags || '{"database"}'
 WHERE title = 'Introduction to Arrays in PostgreSQL';
+
 - 13.2 1. Tạo Bảng với Mảng Hai Chiều:
 Chúng ta sẽ tạo một bảng chess_boards để lưu trữ trạng thái của các ván cờ. Mỗi trạng thái sẽ được biểu diễn bằng một mảng 2 chiều các ký tự.
 SQL
@@ -696,6 +714,7 @@ VALUES
 RETURNING *;
 Mệnh đề RETURNING trong Postgres cho phép bạn nhận lại giá trị của các cột từ các hàng vừa bị tác động bởi các câu lệnh DML (Data Manipulation Language) như INSERT, UPDATE, hoặc DELETE.
 Nó hoạt động giống như một câu lệnh SELECT được thực hiện đồng thời trên các hàng vừa mới được thêm, sửa đổi hoặc xóa.
+
 - 15 CREATE EXTENSION pgcrypto;
 CREATE TABLE usersTest2 (
 id SERIAL PRIMARY KEY,
@@ -716,6 +735,7 @@ SELECT digest('This is some sensitive data', 'sha256');
 SELECT digest('test@example.com', 'md5');
 SELECT encode(digest('test@example.com', 'md5'), 'hex');
 SELECT encode(digest('This is some sensitive data', 'sha256'), 'hex');
+
 - 16 Không nên làm trong PostgreSQL
 Tuyệt đối! Dưới đây là bản tóm tắt đầy đủ và chi tiết của các ý trong trang Wiki "Don't Do This" về những điều nên tránh khi làm việc với PostgreSQL, đã được dịch sang tiếng Việt:
 
@@ -918,9 +938,7 @@ Các Kiểu Dữ liệu Khác (Other Data Types)
 Không dùng money:
 
 Kiểu dữ liệu money thực sự không tốt lắm để lưu trữ các giá trị tiền tệ. numeric, hoặc (hiếm khi) integer có thể tốt hơn.
-
 Tại sao không? Rất nhiều lý do:
-
 Nó là kiểu fixed-point, được triển khai dưới dạng số nguyên máy, nên các phép toán với nó rất nhanh. Nhưng nó không xử lý các phần nhỏ của xu (hoặc tương đương ở các loại tiền tệ khác), hành vi làm tròn của nó có lẽ không phải là điều bạn muốn.
 
 Nó không lưu trữ đơn vị tiền tệ với giá trị, mà giả định rằng tất cả các cột money đều chứa đơn vị tiền tệ được chỉ định bởi cài đặt locale lc_monetary của cơ sở dữ liệu. Nếu bạn thay đổi cài đặt lc_monetary vì bất kỳ lý do gì, tất cả các cột money sẽ chứa giá trị sai. Điều đó có nghĩa là nếu bạn chèn '$10.00' khi lc_monetary được đặt thành 'en_US.UTF-8', giá trị bạn truy xuất có thể là '10,00 Lei' hoặc '¥1,000' nếu lc_monetary bị thay đổi.
@@ -951,3 +969,28 @@ Tại sao không? Tài liệu hướng dẫn nói rằng xác thực trust chỉ
 
 Khi nào nên dùng? Câu trả lời ngắn gọn là không bao giờ. Câu trả lời dài hơn là có một vài trường hợp mà xác thực trust có thể phù hợp: chạy thử nghiệm trên máy chủ PostgreSQL như một phần của CI/CD job trên một mạng đáng tin cậy; làm việc trên máy phát triển cục bộ của bạn, nhưng chỉ cho phép các kết nối TCP/IP qua localhost. Nhưng bạn nên xem liệu các phương pháp thay thế có phù hợp hơn với bạn không. Ví dụ, trên các hệ thống dựa trên UNIX, bạn có thể kết nối đến môi trường phát triển cục bộ của mình bằng cách sử dụng xác thực peer.
 
+- 17 Một Hypertable là một bảng ảo (virtual table) hoặc một lớp trừu tượng (abstraction layer) nằm phía trên nhiều bảng PostgreSQL thông thường khác, được gọi là Chunks.
+Đây là cách nó hoạt động và ý nghĩa của nó:
+Giao diện người dùng (User Interface):
+Đối với người dùng hoặc ứng dụng, bạn tương tác với Hypertable giống hệt như bạn tương tác với một bảng PostgreSQL thông thường. Bạn thực hiện các lệnh INSERT, UPDATE, DELETE, SELECT trực tiếp trên Hypertable.
+Phân vùng tự động (Automatic Partitioning):
+"Phía sau hậu trường", TimescaleDB tự động phân vùng (partition) dữ liệu của Hypertable thành nhiều bảng con vật lý nhỏ hơn gọi là Chunks.
+Việc phân vùng này chủ yếu dựa trên cột thời gian (time column) mà bạn chỉ định khi tạo Hypertable. Mỗi Chunk sẽ chứa dữ liệu cho một khoảng thời gian cụ thể (ví dụ: 7 ngày, 1 tháng).
+Bạn cũng có thể phân vùng thêm theo một hoặc nhiều cột khác (ví dụ: device_id, location), gọi là phân vùng không gian (space partitioning), để tối ưu hóa hơn nữa.
+Chunks là gì?
+Mỗi Chunk là một bảng PostgreSQL tiêu chuẩn thực sự, lưu trữ một phần dữ liệu của Hypertable.
+TimescaleDB tự động tạo các Chunk mới khi cần thiết khi dữ liệu mới được chèn vào.
+Mỗi Chunk có các ràng buộc (constraints) riêng để đảm bảo dữ liệu trong đó thuộc đúng khoảng thời gian (và không gian, nếu có).
+Mỗi Chunk có thể có các chỉ mục (indexes) riêng, thường được tự động tạo dựa trên các chỉ mục của Hypertable.
+Lợi ích của việc sử dụng Hypertables (và Chunks):
+Hiệu năng truy vấn (Query Performance): Khi bạn truy vấn Hypertable với điều kiện lọc theo thời gian (ví dụ: WHERE time > '2023-10-26' AND time < '2023-10-27'), TimescaleDB chỉ cần quét các Chunks có chứa dữ liệu trong khoảng thời gian đó, bỏ qua hàng tỷ bản ghi tiềm năng trong các Chunks khác. Điều này làm tăng tốc độ truy vấn lên đáng kể so với việc quét một bảng khổng lồ duy nhất.
+Hiệu năng ghi (Ingest Performance): Việc ghi dữ liệu vào các Chunks nhỏ hơn thường nhanh hơn so với việc ghi vào một bảng lớn duy nhất, đặc biệt là khi các chỉ mục cũng trở nên lớn.
+Khả năng mở rộng (Scalability): Cho phép quản lý hiệu quả các tập dữ liệu cực lớn (hàng terabytes hoặc petabytes) mà không làm giảm hiệu năng.
+Quản lý dữ liệu (Data Management):
+Xóa dữ liệu cũ: Việc xóa dữ liệu cũ trở nên cực kỳ nhanh chóng và hiệu quả. Thay vì chạy lệnh DELETE tốn kém tài nguyên trên một bảng lớn, bạn chỉ cần thả (drop) toàn bộ Chunk cũ bằng lệnh drop_chunks(). Việc này gần như tức thời và không gây phân mảnh bảng.
+Nén dữ liệu (Compression): TimescaleDB cho phép nén dữ liệu ở cấp độ Chunk. Bạn có thể thiết lập chính sách để tự động nén các Chunks cũ nhằm tiết kiệm dung lượng lưu trữ mà vẫn có thể truy vấn được.
+Sao lưu/Phục hồi: Có thể thực hiện các thao tác quản lý ở cấp độ Chunk.
+Tạo Hypertable:
+Bạn bắt đầu bằng cách tạo một bảng PostgreSQL thông thường.
+Sau đó, bạn sử dụng hàm create_hypertable() do TimescaleDB cung cấp để biến bảng đó thành Hypertable, chỉ định bảng nào và cột thời gian nào sẽ được sử dụng để phân vùng.
+Ví dụ: SELECT create_hypertable('sensor_data', 'ts');

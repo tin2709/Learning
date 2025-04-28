@@ -1,0 +1,1 @@
+1 https://readme.so/fr/editor : Dùng để thiết kế file readme có thể thực hiện thiết kế cho api và custom cho mẫu thiết kế
