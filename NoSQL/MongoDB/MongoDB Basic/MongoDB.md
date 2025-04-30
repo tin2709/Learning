@@ -359,3 +359,335 @@ MongoDB có thể sử dụng chỉ mục đa khóa để tìm các document có
 <div align="right">
 <b><a href="#">↥ trở về đầu trang</a></b>
 </div>
+
+## 7. Tại sao Profiler được dùng trong MongoDB?
+Trình phân tích cơ sở dữ liệu (database profiler) ghi lại thông tin dữ liệu (captures data information) về các thao tác đọc và ghi (read and write operations), các thao tác con trỏ (cursor operations) và các lệnh cơ sở dữ liệu (database commands). Trình phân tích cơ sở dữ liệu ghi dữ liệu vào collection system.profile, là một collection giới hạn dung lượng (capped collection).
+Trình phân tích cơ sở dữ liệu thu thập thông tin chi tiết (detailed information) về các Lệnh Cơ sở dữ liệu được thực thi đối với một instance mongod đang chạy. Điều này bao gồm các hoạt động CRUD cũng như các lệnh cấu hình và quản trị (configuration and administration commands).
+
+Profiler has 3 profiling levels.
+
+* **Level 0** - Profiler sẽ không ghi lại (log) bất kỳ dữ liệu nào
+* **Level 1** - Profiler sẽ chỉ ghi lại các thao tác chậm (slow operations) vượt quá một ngưỡng (threshold) nào đó
+* **Level 2** - Profiler sẽ ghi lại tất cả các thao tác
+
+**1. Để lấy mức độ profiling hiện tại.**
+
+```bash
+db.getProfilingLevel()  
+
+// Output
+0
+```
+
+**2. Để kiểm tra trạng thái profiling hiện tại:**
+
+```bash
+db.getProfilingStatus()
+
+```
+
+**3. Để đặt mức độ profiling:**
+
+```bash
+db.setProfilingLevel(1, 40)
+
+// Output
+{ "was" : 0, "slowms" : 100, "ok" : 1 }
+```
+
+<div align="right">
+    <b><a href="#">↥ back to top</a></b>
+</div>
+
+## 8 Làm cách nào để xóa thuộc tính khỏi Đối tượng MongoDB?
+**$unset:**
+
+Toán tử $unset xóa (deletes) một trường cụ thể. Nếu trường không tồn tại, thì $unset không làm gì cả (does nothing). Khi được sử dụng với $ để khớp với một phần tử mảng (match an array element), $unset thay thế phần tử khớp bằng null thay vì xóa phần tử khớp khỏi mảng. Hành vi này giữ nguyên kích thước mảng (consistent the array size) và vị trí phần tử (element positions).
+
+syntax:
+
+```js
+{ $unset: { <field1>: "", ... } }
+```
+
+**Example:**
+
+Xóa thuộc tính properties.service khỏi tất cả các bản ghi trong collection này.
+
+```js
+db.collection.update(
+    {},
+    {
+        $unset : {
+            "properties.service" : 1
+        }
+    },
+    {
+        multi: true
+    }
+);
+```
+
+Để xác minh chúng đã bị xóa, bạn có thể sử dụng:
+
+```js
+db.collection.find(
+    {
+        "properties.service" : {
+            $exists : true
+         }
+    }
+).count(true);
+```
+
+<div align="right">
+    <b><a href="#">↥ back to top</a></b>
+</div>
+
+## 9 "Namespace" trong MongoDB là gì
+
+MongoDB lưu trữ các đối tượng BSON (Binary Interchange and Structure Object Notation - Ký hiệu Đối tượng và Cấu trúc Trao đổi Nhị phân) trong collection. Sự nối chuỗi (concatenation) của tên collection và tên cơ sở dữ liệu được gọi là namespace (không gian tên).
+
+<div align="right">
+    <b><a href="#">↥ back to top</a></b>
+</div>
+
+## 10 Replication (Sao chép) trong Mongodb là gì
+
+Replication tồn tại chủ yếu để cung cấp tính dư thừa dữ liệu (data redundancy) và tính sẵn sàng cao (high availability). Nó duy trì độ bền (durability) của dữ liệu bằng cách giữ nhiều bản sao (multiple copies) hoặc replica của dữ liệu đó trên các máy chủ cô lập vật lý (physically isolated servers). Replication cho phép tăng tính sẵn sàng của dữ liệu (increase data availability) bằng cách tạo nhiều bản sao dữ liệu trên các máy chủ. Điều này đặc biệt hữu ích nếu một máy chủ gặp sự cố (server crashes) hoặc lỗi phần cứng (hardware failure).
+
+Với MongoDB, replication được thực hiện thông qua một Replica Set (Tập bản sao). Các thao tác ghi (Writer operations) được gửi đến máy chủ chính (primary server - node), máy chủ này sẽ áp dụng các thao tác trên các máy chủ phụ (secondary servers), sao chép (replicating) dữ liệu. Nếu máy chủ chính bị lỗi (fails) (do sự cố hoặc lỗi hệ thống), một trong các máy chủ phụ sẽ tiếp quản (takes over) và trở thành nút chính mới thông qua bầu chọn (election). Nếu máy chủ đó trở lại trực tuyến (comes back online), nó sẽ trở thành máy chủ phụ sau khi phục hồi hoàn toàn (fully recovers), hỗ trợ (aiding) nút chính mới.
+<div align="right">
+<b><a href="#">↥ trở về đầu trang</a></b>
+</div>
+
+## 10.1 Replica Set (Tập bản sao) trong MongoDB là gì
+
+Đó là một nhóm các tiến trình mongo (group of mongo processes) duy trì cùng một tập dữ liệu (maintain same data set). Replica set cung cấp tính dư thừa (redundancy) và tính sẵn sàng cao (high availability), và là cơ sở (basis) cho tất cả các triển khai sản xuất (production deployments). Một replica set chứa một nút chính (primary node) và nhiều nút phụ (secondary nodes).
+Nút chính nhận tất cả các thao tác ghi (write operations). Một replica set chỉ có thể có một nút chính có khả năng xác nhận ghi (confirming writes) với write concern { w: "majority" }; mặc dù trong một số trường hợp, một instance mongod khác có thể tạm thời tin rằng (transiently believe) mình cũng là primary.
+
+Các nút phụ sao chép oplog của primary (replicate the primary's oplog) và áp dụng các thao tác (apply the operations) vào tập dữ liệu của chúng sao cho tập dữ liệu của các nút phụ phản ánh (reflect) tập dữ liệu của primary. Nếu primary không khả dụng (unavailable), một secondary đủ điều kiện (eligible secondary) sẽ tổ chức bầu chọn (hold an election) để tự bầu mình (elect itself) làm primary mới.
+![alt text](image-5.png)
+<div align="right">
+<b><a href="#">↥ trở về đầu trang</a></b>
+</div>
+
+## 11 MongoDB đảm bảo tính sẵn sàng cao như thế nào?
+
+Tính sẵn sàng cao (High Availability - HA) đề cập đến việc cải thiện tính sẵn sàng của hệ thống và ứng dụng bằng cách giảm thiểu thời gian ngừng hoạt động (minimizing the downtime) gây ra bởi các hoạt động bảo trì định kỳ (routine maintenance operations - có kế hoạch) và các sự cố hệ thống đột ngột (sudden system crashes - không có kế hoạch).
+
+Replica Set:
+
+Cơ chế replica set của MongoDB có hai mục đích chính:
+Một là để dự phòng dữ liệu (data redundancy) nhằm phục hồi lỗi (failure recovery). Khi phần cứng bị lỗi, hoặc nút bị hỏng (node is down) vì lý do khác, bạn có thể sử dụng bản sao (replica) để phục hồi.
+
+Mục đích khác là để phân tách đọc-ghi (read-write splitting). Nó định tuyến (routes) các yêu cầu đọc đến bản sao để giảm áp lực đọc (reading pressure) trên nút chính.
+
+MongoDB tự động duy trì (automatically maintains) các replica set, nhiều bản sao dữ liệu được phân tán trên các máy chủ, tủ rack và trung tâm dữ liệu (distributed across servers, racks and data centers). Replica set giúp ngăn chặn thời gian ngừng hoạt động của cơ sở dữ liệu (prevent database downtime) bằng cách sử dụng sao chép gốc (native replication) và chuyển đổi dự phòng tự động (automatic failover).
+
+Một replica set bao gồm nhiều thành viên replica set (replica set members). Tại bất kỳ thời điểm nào, một thành viên hoạt động như thành viên chính (primary member), và các thành viên khác hoạt động như thành viên phụ (secondary members). Nếu thành viên chính bị lỗi vì bất kỳ lý do gì (ví dụ: lỗi phần cứng), một trong các thành viên phụ sẽ tự động được bầu (automatically elected) làm primary và bắt đầu xử lý tất cả các lượt đọc và ghi (process all reads and writes).
+<div align="right">
+<b><a href="#">↥ trở về đầu trang</a></b>
+</div>
+
+## 12 Document MongoDB nhúng (Embedded) là gì
+
+Một Document MongoDB nhúng, hoặc lồng nhau (nested), là một document bình thường được lồng vào bên trong một document khác trong một collection MongoDB. Việc nhúng dữ liệu được kết nối (Embedding connected data) vào một document duy nhất có thể giảm số lượng thao tác đọc (reduce the number of read operations) cần thiết để lấy dữ liệu. Nói chung, chúng ta nên cấu trúc lược đồ (structure our schema) của mình sao cho ứng dụng nhận được tất cả thông tin cần thiết (receives all of its required information) trong một thao tác đọc duy nhất (single read operation).
+
+Ví dụ (Example):
+
+Trong mô hình dữ liệu chuẩn hóa (normalized data model), các document địa chỉ chứa tham chiếu (reference) đến document người bảo trợ (patron document).
+
+**Example:**
+
+Trong mô hình dữ liệu chuẩn hóa (normalized data model), các document địa chỉ chứa tham chiếu (reference) đến document người bảo trợ (patron document).
+
+
+```js
+// patron document
+{
+   _id: "joe",
+   name: "Joe Bookreader"
+}
+
+// address documents
+{
+   patron_id: "joe", // reference to patron document
+   street: "123 Fake Street",
+   city: "Faketon",
+   state: "MA",
+   zip: "12345"
+}
+
+{
+   patron_id: "joe",
+   street: "1 Some Other Street",
+   city: "Boston",
+   state: "MA",
+   zip: "12345"
+}
+```
+
+Các document nhúng đặc biệt hữu ích khi tồn tại mối quan hệ một-nhiều (one-to-many relationship) giữa các document. Trong ví dụ trên, chúng ta thấy rằng một khách hàng duy nhất có nhiều địa chỉ liên kết với anh ta. Cấu trúc document lồng nhau (nested document structure) giúp dễ dàng truy xuất thông tin địa chỉ hoàn chỉnh (retrieve complete address information) về khách hàng này chỉ bằng một truy vấn duy nhất (single query).
+<div align="right">
+<b><a href="#">↥ trở về đầu trang</a></b>
+</div>
+
+## 13 Làm thế nào bạn có thể đạt được mối quan hệ khóa chính - khóa ngoại trong MongoDB?
+
+Mối quan hệ khóa chính - khóa ngoại có thể đạt được bằng cách nhúng một document vào bên trong một document khác (embedding one document inside the another). Ví dụ, một document phòng ban có thể chứa (các) document nhân viên của nó.
+<div align="right">
+<b><a href="#">↥ trở về đầu trang</a></b>
+</div>
+
+## 13.1 Khi nào chúng ta nên nhúng một document vào trong một document khác trong MongoDB
+
+Bạn nên xem xét việc nhúng document cho:
+
+Mối quan hệ "chứa" (contains relationships) giữa các thực thể
+
+Mối quan hệ một-nhiều (One-to-many relationships)
+
+Lý do hiệu năng (Performance reasons)
+<div align="right">
+<b><a href="#">↥ trở về đầu trang</a></b>
+</div>
+
+## 14 Sự khác biệt giữa MongoDB và SQL-SERVER là gì
+
+|Base of Comparison  | MS SQL Server      | MongoDB             |
+|--------------------|--------------------|---------------------|
+|Storage Model       |RDBMS               |Hướng tài liệu (Document-Oriented)    |
+|Joins               |Yes                 |No                   |
+|Transaction         |ACID                |Giao dịch ACID đa document với cô lập snapshot |
+|Agile practices     |No                  |Yes                  |
+|Data Schema         |Fixed               |Dynamic              |
+|Scalability         |Vertical            |Horizontal           |
+|Map Reduce          |No                  |Yes                  |
+|Language            |SQL query language  |JSON Query Language  |
+|Secondary index     |Yes                 |Yes                  |
+|Triggers            |Yes                 |Yes                  |
+|Foreign Keys        |Yes                 |No                   |
+|Concurrency         |Yes                 |yes                  |
+|XML Support         |Yes                 |No                   |
+
+![alt text](image-6.png)
+
+<div align="right">
+<b><a href="#">↥ trở về đầu trang</a></b>
+</div>
+
+## 15 How can you achieve transaction and locking in MongoDB?
+
+Trong MongoDB (4.2), một thao tác trên một document đơn lẻ là nguyên tử (atomic). Đối với các tình huống yêu cầu tính nguyên tử của các thao tác đọc và ghi trên nhiều document (trong một hoặc nhiều collection), MongoDB hỗ trợ các giao dịch đa document (multi-document transactions). Với các giao dịch phân tán (distributed transactions), giao dịch có thể được sử dụng trên nhiều hoạt động, collection, cơ sở dữ liệu, document và shard.
+
+MongoDB cho phép nhiều client đọc và ghi cùng một dữ liệu. Để đảm bảo tính nhất quán (ensure consistency), nó sử dụng khóa (locking) và các biện pháp kiểm soát đồng thời (concurrency control measures) khác để ngăn chặn nhiều client sửa đổi cùng một phần dữ liệu đồng thời (modifying the same piece of data simultaneously).
+
+MongoDB sử dụng khóa đa mức độ chi tiết (multi-granularity locking) cho phép các hoạt động khóa ở cấp độ toàn cục (global), cơ sở dữ liệu (database) hoặc collection, và cho phép các storage engine riêng lẻ triển khai kiểm soát đồng thời riêng của chúng dưới cấp độ collection (ví dụ: ở cấp độ document trong WiredTiger). MongoDB sử dụng khóa đọc-ghi (reader-writer locks) cho phép những người đọc đồng thời (concurrent readers) truy cập được chia sẻ (shared access) vào một tài nguyên, chẳng hạn như cơ sở dữ liệu hoặc collection.
+
+Các chế độ khóa được biểu thị như sau:
+|Lock Mode   |Description                 |
+|------------|----------------------------|
+|R           |Represents Shared (S) lock. |
+|W           |Represents Exclusive (X) lock.|
+|r           |Represents Intent Shared (IS) lock.|
+|w           |Represents Intent Exclusive (IX) lock.|
+
+Ví dụ (Example):
+
+Ví dụ sau đây làm nổi bật các thành phần chính của API giao dịch
+
+```js
+const client = new MongoClient(uri);
+await client.connect();
+
+// Prereq: Create collections.
+
+await client.db('mydb1').collection('foo').insertOne({ abc: 0 }, { w: 'majority' });
+
+await client.db('mydb2').collection('bar').insertOne({ xyz: 0 }, { w: 'majority' });
+
+// Step 1: Start a Client Session
+const session = client.startSession();
+
+// Step 2: Optional. Define options to use for the transaction
+const transactionOptions = {
+  readPreference: 'primary',
+  readConcern: { level: 'local' },
+  writeConcern: { w: 'majority' }
+};
+
+// Step 3: Use withTransaction to start a transaction, execute the callback, and commit (or abort on error)
+// Note: The callback for withTransaction MUST be async and/or return a Promise.
+try {
+  await session.withTransaction(async () => {
+    const coll1 = client.db('mydb1').collection('foo');
+    const coll2 = client.db('mydb2').collection('bar');
+
+    // Important:: You must pass the session to the operations
+
+    await coll1.insertOne({ abc: 1 }, { session });
+    await coll2.insertOne({ xyz: 999 }, { session });
+  }, transactionOptions);
+} finally {
+   await session.endSession();
+   await client.close();
+}
+```
+
+<div align="right">
+    <b><a href="#">↥ back to top</a></b>
+</div>
+
+## 16 Khi nào nên sử dụng MongoDB thay vì MySQL?
+
+**1. MongoDB:**
+
+MongoDB là một trong những cơ sở dữ liệu hướng tài liệu (document-oriented databases) phổ biến nhất thuộc nhóm cơ sở dữ liệu NoSQL. Nó sử dụng định dạng cặp khóa-giá trị (key-value pairs), ở đây được gọi là kho lưu trữ tài liệu (document store). Kho lưu trữ tài liệu trong MongoDB được tạo và lưu trữ trong các tệp BSON, thực tế là một phiên bản sửa đổi một chút của tệp JSON và do đó tất cả JS đều được hỗ trợ.
+
+Nó cung cấp hiệu quả (efficiency) và độ tin cậy (reliability) cao hơn, từ đó có thể đáp ứng yêu cầu về dung lượng lưu trữ và tốc độ của bạn. Việc triển khai không lược đồ (schema-free implementation) của MongoDB loại bỏ các điều kiện tiên quyết của việc xác định một cấu trúc cố định. Các mô hình này cho phép biểu diễn mối quan hệ phân cấp (hierarchical relationships representation) và tạo điều kiện (facilitate) cho khả năng thay đổi cấu trúc của bản ghi.
+
+Ưu điểm (Pros):
+MongoDB có độ trễ (latency) thấp hơn cho mỗi truy vấn & tốn ít thời gian CPU hơn cho mỗi truy vấn vì nó thực hiện ít công việc hơn (ví dụ: không có phép nối (joins), giao dịch (transactions)). Kết quả là, nó có thể xử lý tải (load) cao hơn về số lượng truy vấn mỗi giây (queries per second).
+MongoDB dễ phân mảnh (shard - sử dụng trong cụm) hơn vì nó không phải lo lắng về giao dịch và tính nhất quán (consistency).
+MongoDB có tốc độ ghi (write speed) nhanh hơn vì nó không phải lo lắng về giao dịch hoặc quay lui (rollbacks) (và do đó không phải lo lắng về khóa (locking)).
+
+Nó hỗ trợ nhiều Tính năng như sửa chữa tự động (automatic repair), phân phối dữ liệu dễ dàng hơn (easier data distribution) và mô hình dữ liệu đơn giản hơn (simpler data models) làm cho yêu cầu quản trị và tinh chỉnh (administration and tuning requirements) ít hơn (lesser) trong NoSQL.
+Cơ sở dữ liệu NoSQL rẻ và mã nguồn mở (cheap and open source).
+Cơ sở dữ liệu NoSQL hỗ trợ lưu vào bộ nhớ đệm trong bộ nhớ hệ thống (caching in system memory) vì vậy nó tăng hiệu suất đầu ra dữ liệu (increases data output performance).
+
+Nhược điểm (Cons):
+
+MongoDB không hỗ trợ giao dịch.
+Nói chung, MongoDB tạo ra nhiều công việc hơn (ví dụ: chi phí CPU cao hơn) cho máy chủ client. Ví dụ, để nối (join) dữ liệu, người ta phải đưa ra nhiều truy vấn và thực hiện nối dữ liệu phía client.
+Không có Thủ tục lưu trữ (Stored Procedures) trong mongo dB (cơ sở dữ liệu NoSQL).
+
+Lý do sử dụng Cơ sở dữ liệu NoSQL:
+
+Lưu trữ khối lượng lớn dữ liệu không có cấu trúc: Cơ sở dữ liệu NoSQL không giới hạn (limit) các loại dữ liệu có thể lưu trữ. Thêm vào đó, bạn có thể thêm các loại mới khi nhu cầu kinh doanh thay đổi.
+
+Sử dụng điện toán đám mây và lưu trữ đám mây: Lưu trữ dựa trên đám mây (Cloud-based storage) là một giải pháp tuyệt vời, nhưng nó yêu cầu dữ liệu phải dễ dàng trải rộng (easily spread) trên nhiều máy chủ để mở rộng quy mô (scaling). Sử dụng phần cứng giá cả phải chăng tại chỗ (affordable hardware on-site) để thử nghiệm và sau đó cho sản xuất trên đám mây là điều mà cơ sở dữ liệu NoSQL được thiết kế cho.
+
+Phát triển nhanh chóng (Rapid development): Nếu bạn đang phát triển bằng các phương pháp luận linh hoạt hiện đại (modern agile methodologies), cơ sở dữ liệu quan hệ sẽ làm bạn chậm lại (slow you down). Cơ sở dữ liệu NoSQL không yêu cầu mức độ chuẩn bị (level of preparation) thường cần thiết cho cơ sở dữ liệu quan hệ.
+
+**2. MySQL:**
+
+MySQL là một hệ quản trị cơ sở dữ liệu quan hệ (RDBMS) mã nguồn mở phổ biến được phát triển, phân phối và hỗ trợ bởi Oracle Corporation. MySQL lưu trữ dữ liệu trong các bảng (tables) và sử dụng ngôn ngữ truy vấn cấu trúc (SQL) để truy cập cơ sở dữ liệu. Nó sử dụng Ngôn ngữ Truy vấn Cấu trúc SQL để truy cập và truyền (transfer) dữ liệu và các lệnh như 'SELECT', 'UPDATE', 'INSERT' và 'DELETE' để quản lý (manage) nó.
+
+Thông tin liên quan (Related information) được lưu trữ trong các bảng khác nhau nhưng khái niệm về các phép toán JOIN đơn giản hóa quá trình tương quan hóa (correlating) nó và thực hiện truy vấn trên nhiều bảng và giảm thiểu khả năng trùng lặp dữ liệu (data duplication). Nó tuân theo mô hình ACID (Atomic, Consistent, Isolated and Durable - Nguyên tử, Nhất quán, Cô lập và Bền vững). Điều này có nghĩa là một khi giao dịch hoàn tất (transaction is complete), dữ liệu vẫn nhất quán và ổn định trên đĩa (data remains consistent and stable on the disc), có thể bao gồm các vị trí bộ nhớ riêng biệt.
+
+Ưu điểm (Pros):
+
+Cơ sở dữ liệu SQL là cơ sở dữ liệu dựa trên bảng.
+Lưu trữ dữ liệu theo hàng và cột (rows and columns)
+Mỗi hàng chứa một phiên bản dữ liệu duy nhất (unique instance of data) cho các danh mục được xác định bởi các cột.
+Cung cấp cơ sở khóa chính (primary key), để nhận dạng duy nhất các hàng.
+
+Nhược điểm (Cons):
+
+Người dùng phải mở rộng quy mô cơ sở dữ liệu quan hệ trên các máy chủ mạnh mẽ, đắt tiền và khó xử lý (difficult to handle). Để mở rộng quy mô cơ sở dữ liệu quan hệ, nó phải được phân phối (distributed) trên nhiều máy chủ. Xử lý bảng trên các máy chủ khác nhau rất khó khăn.
+
+Trong SQL server, dữ liệu phải vừa với các bảng bằng mọi cách (data has to fit into tables anyhow). Nếu dữ liệu của bạn không vừa với các bảng, thì bạn cần thiết kế cấu trúc cơ sở dữ liệu của mình sẽ phức tạp và lại khó xử lý.
+<div align="right">
+<b><a href="#">↥ trở về đầu trang</a></b>
+</div>
