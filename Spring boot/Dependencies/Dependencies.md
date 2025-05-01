@@ -102,3 +102,102 @@ Dưới đây là danh sách các lĩnh vực và thành phần nổi bật củ
 			<artifactId>guava</artifactId>
 			<version>${guava.version}</version>
 		</dependency>
+
+        # README: Tản mạn về Liquibase và cách tích hợp vào ứng dụng Spring Boot
+```
+# 2 Giới thiệu Liquibase
+
+
+Liquibase là một công cụ mã nguồn mở mạnh mẽ, giúp đơn giản hóa việc theo dõi, quản lý phiên bản và tự động hóa việc triển khai các thay đổi cơ sở dữ liệu (DB).
+
+## Tại sao cần Liquibase? (Vấn đề & Giải pháp)
+
+Bài viết sử dụng câu chuyện về "Dan" để minh họa tầm quan trọng của việc tuân thủ kế hoạch. Giống như Dan gặp rắc rối khi phá vỡ lịch trình hàng ngày của mình, việc quản lý thay đổi DB một cách thủ công hoặc không có kế hoạch rõ ràng có thể dẫn đến:
+
+*   Lỗi hệ thống.
+*   Dữ liệu không nhất quán giữa các môi trường (dev, test, prod).
+*   Khó khăn trong việc theo dõi lịch sử thay đổi.
+*   Mất thời gian và tăng rủi ro khi triển khai.
+
+**Liquibase cung cấp giải pháp bằng cách:**
+
+*   **Áp dụng một phương pháp có cấu trúc:** Định nghĩa các thay đổi DB trong các file `changelog`.
+*   **Đảm bảo tính nhất quán:** Các thay đổi được áp dụng tuần tự và được theo dõi.
+*   **Tự động hóa:** Tích hợp vào quy trình build/deploy để tự động cập nhật DB.
+*   **Kiểm soát phiên bản:** Theo dõi lịch sử thay đổi, tương tự như Git cho code.
+*   **Giảm thiểu rủi ro:** Có các cơ chế kiểm tra và kiểm soát (như checksum, lock).
+
+## Liquibase hoạt động như thế nào? (Khái niệm cốt lõi)
+
+1.  **Changelog File:** Là trung tâm của Liquibase, thường là file XML (nhưng cũng hỗ trợ YAML, JSON, SQL). File này chứa danh sách các thay đổi cần áp dụng lên DB.
+2.  **Changesets:** Changelog được chia thành các đơn vị gọi là `changeset`. Mỗi `changeset` đại diện cho một thay đổi nguyên tử (atomic) đối với DB (ví dụ: tạo bảng, thêm cột). Mỗi changeset được định danh duy nhất bằng `id` và `author`.
+3.  **Bảng theo dõi:** Khi chạy lần đầu, Liquibase tự động tạo 2 bảng trong DB của bạn:
+    *   `DATABASECHANGELOG`: Ghi lại lịch sử các changeset nào đã được thực thi thành công (dựa trên id, author, tên file, checksum). Liquibase dựa vào bảng này để biết cần chạy những changeset mới nào.
+    *   `DATABASECHANGELOGLOCK`: Đảm bảo rằng chỉ có một tiến trình Liquibase chạy trên cùng một DB tại một thời điểm, tránh xung đột. Nó hoạt động như một cơ chế khóa (mutex).
+
+## Tích hợp với Spring Boot (Các bước chính)
+
+Bài viết hướng dẫn các bước cơ bản để tích hợp Liquibase vào Spring Boot:
+
+1.  **Thêm Dependency:** Khai báo dependency `liquibase-core` trong file `pom.xml` (hoặc `build.gradle`).
+    ```xml
+    <dependency>
+        <groupId>org.liquibase</groupId>
+        <artifactId>liquibase-core</artifactId>
+        <!-- <version>...</version> --> <!-- Spring Boot thường quản lý phiên bản -->
+    </dependency>
+    ```
+2.  **Tạo Configuration Bean (Tùy chọn - Spring Boot có thể tự cấu hình):** Mặc dù Spring Boot thường tự động cấu hình Liquibase nếu phát hiện dependency và file changelog mặc định, bạn có thể tùy chỉnh bằng cách tạo một Bean `SpringLiquibase`. Ví dụ cấu hình cơ bản chỉ định đường dẫn file changelog:
+    ```java
+    @Configuration
+    // @EnableConfigurationProperties({ LiquibaseProperties.class}) // Cần nếu muốn dùng properties từ application.properties
+    public class LiquibaseConfiguration {
+
+        @Bean
+        public SpringLiquibase liquibase(DataSource dataSource, LiquibaseProperties properties) {
+             // Sử dụng LiquibaseProperties nếu cần cấu hình từ application.properties
+             // ví dụ: properties.getChangeLog(), properties.getContexts(), ...
+
+            SpringLiquibase liquibase = new SpringLiquibase();
+            // Đường dẫn mặc định là classpath:db/changelog/db.changelog-master.yaml (hoặc .xml, .json)
+            // Có thể thay đổi qua application.properties: spring.liquibase.change-log=classpath:databaseChangeLog.xml
+            liquibase.setChangeLog("classpath:databaseChangeLog.xml"); // Chỉ định file changelog chính
+            liquibase.setDataSource(dataSource);
+            // liquibase.setContexts(...);
+            // liquibase.setDefaultSchema(...);
+            // ... các cấu hình khác
+            return liquibase;
+        }
+    }
+    ```
+    *Lưu ý:* Với Spring Boot, cách phổ biến hơn là cấu hình qua `application.properties` hoặc `application.yml` (ví dụ: `spring.liquibase.change-log=classpath:db/changelog/db.changelog-master.xml`).
+3.  **Tạo Changelog File:** Tạo file changelog chính (ví dụ: `databaseChangeLog.xml` hoặc theo đường dẫn cấu hình) trong thư mục `src/main/resources`.
+4.  **Định nghĩa Changesets:** Viết các thay đổi DB (tạo bảng, thêm cột,...) bên trong các thẻ `<changeSet>` trong file changelog. Có thể sử dụng thẻ `<include file="path/to/other/changelog.xml"/>` để chia nhỏ và quản lý các file changelog con.
+    ```xml
+    <databaseChangeLog ...>
+        <include file="db/changelog/changes/001-create-initial-tables.xml"/>
+        <include file="db/changelog/changes/002-add-user-roles.xml"/>
+
+        <changeSet author="yourname" id="feature-xyz-1">
+            <addColumn tableName="your_table">
+                <column name="new_column" type="varchar(255)"/>
+            </addColumn>
+        </changeSet>
+        <!-- Các changeset khác -->
+    </databaseChangeLog>
+    ```
+5.  **Khởi chạy ứng dụng:** Khi ứng dụng Spring Boot khởi động, nó sẽ tự động chạy Liquibase (nếu được bật - mặc định là bật). Liquibase sẽ kiểm tra bảng `DATABASECHANGELOG`, tìm các changeset mới trong file changelog và thực thi chúng.
+
+## Điểm quan trọng
+
+*   **Tính bất biến của Changeset:** Liquibase tính toán và lưu trữ `checksum` (tổng kiểm) cho mỗi changeset đã thực thi vào bảng `DATABASECHANGELOG`. Nếu bạn sửa đổi nội dung của một changeset *đã được thực thi*, Liquibase sẽ phát hiện sự thay đổi checksum này khi khởi động lần sau và báo lỗi `ValidationFailedException`, ngăn ứng dụng khởi động. Điều này đảm bảo rằng lịch sử thay đổi DB là bất biến và nhất quán. **Muốn thay đổi cấu trúc đã tạo, bạn phải tạo một `changeset` mới.**
+*   **Bảng `DATABASECHANGELOG`:** Là "bộ não" ghi nhớ lịch sử, chứa thông tin chi tiết về các changeset đã chạy (id, author, filename, checksum, ngày chạy, trạng thái,...).
+*   **Bảng `DATABASECHANGELOGLOCK`:** Ngăn chặn tình trạng "race condition" khi nhiều instance ứng dụng cùng khởi động và cố gắng chạy migration. Bảng này chứa thông tin về việc ai đang giữ khóa và khi nào. Nếu ứng dụng bị tắt đột ngột khi đang giữ khóa, bạn có thể cần phải giải phóng khóa thủ công. Bài viết gợi ý có thể dùng trạng thái khóa (cột `LOCKED` = 1) để tạm ngưng migration nếu DB gặp sự cố.
+
+## Kết luận
+
+Liquibase là một công cụ giá trị để quản lý các thay đổi cơ sở dữ liệu một cách có hệ thống, đáng tin cậy và tự động, đặc biệt hữu ích trong các dự án phát triển phần mềm hiện đại, nhất là khi tích hợp với các framework như Spring Boot.
+
+---
+
+*Nguồn: [Tản mạn về Liquibase và cách tích hợp vào ứng dụng Spring Boot - Tuanh.net](https://www.tuanh.net/blog/spring/stories-about-liquibase-and-how-to-integrate-it-into-spring-boot-applications)*
