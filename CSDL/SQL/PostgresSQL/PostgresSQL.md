@@ -179,7 +179,7 @@ IGNORE_WHEN_COPYING_END
 (Result includes rows for each specified grouping, with NULL indicating the aggregated dimension)
 
 MySQL Comparison: Requires multiple SELECT ... GROUP BY statements combined with UNION ALL. Less concise and potentially less performant.
-
+```
 2.2 CUBE
 
 A shortcut for GROUPING SETS that includes all possible combinations of the listed columns, plus the grand total. CUBE (a, b) = GROUPING SETS ((a, b), (a), (b), ()).
@@ -741,6 +741,7 @@ download
 Use code with caution.
 SQL
 IGNORE_WHEN_COPYING_END
+```
 7. Conclusion
 
 This guide provides a practical overview of several powerful PostgreSQL features, including extensions like hstore, pgcrypto, and pg_cron, advanced SQL capabilities like GROUPING SETS, CUBE, ROLLUP, native Array types, UPSERT operations, and Materialized Views. It also contrasts some of these features with their MySQL counterparts.
