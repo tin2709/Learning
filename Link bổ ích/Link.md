@@ -13,3 +13,5 @@
 7 https://downgit.github.io/#/home : dowload một phần nào đó trong git repo
 
 8 https://app.napkin.ai/ : AI tạo infographic cho nội dung
+
+9 https://tools.ui-layouts.com/background-snippets: tạo shadow, mesh-gradient, clip-path
