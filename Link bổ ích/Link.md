@@ -15,3 +15,5 @@
 8 https://app.napkin.ai/ : AI tạo infographic cho nội dung
 
 9 https://tools.ui-layouts.com/background-snippets: tạo shadow, mesh-gradient, clip-path
+
+10 https://svgl.app/: tạo svg logo bằng react,...
