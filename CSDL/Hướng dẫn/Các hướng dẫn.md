@@ -327,3 +327,78 @@ Các triển khai `Memtable` hiện đại thường tối ưu hóa cho truy c�
 
 Hiểu rõ cách `Memtables` hoạt động, các tham số cấu hình liên quan và cách tối ưu hóa chúng là điều cần thiết cho các quản trị viên cơ sở dữ liệu và nhà phát triển ứng dụng muốn khai thác tối đa hiệu năng và độ tin cậy của hệ thống cơ sở dữ liệu của họ.
 ![alt text](image-2.png)
+
+# 2 Proto vs JSON: Khi nào nên dùng cái nào (và Tại sao)
+
+Khi xây dựng các ứng dụng hiện đại – dù là di động, web hay backend – việc tuần tự hóa (serialisation) dữ liệu quan trọng hơn bạn nghĩ. Hai lựa chọn thường xuất hiện là JSON và Protocol Buffers (Proto).
+
+![alt text](image-4.png)
+
+## JSON vs Proto: Giới thiệu nhanh
+
+*   **JSON (JavaScript Object Notation):**
+    *   Giống như chiếc áo phông cũ yêu thích của bạn – thoải mái, dễ dàng, ai cũng biết.
+    *   Định dạng dựa trên **văn bản (text-based)**.
+    *   **Con người có thể đọc được (human-readable)**.
+    *   Phổ biến và dễ tích hợp.
+*   **Proto (Protocol Buffers):**
+    *   Giống như bộ đồ đua hiệu suất cao – không thoải mái bằng cho việc hàng ngày, nhưng cực kỳ nhanh và hiệu quả khi bạn cần.
+    *   Định dạng **nhị phân (binary)**.
+    *   **Không thể đọc trực tiếp bởi con người**.
+    *   Yêu cầu định nghĩa schema (`.proto` file) và bước biên dịch/tạo mã.
+
+## So sánh Hiệu năng (Dựa trên Benchmark)
+
+Một benchmark so sánh việc tuần tự hóa/giải tuần tự hóa dữ liệu cho 100 và 1000 người dùng cho thấy:
+
+![alt text](image-5.png)
+![alt text](image-6.png)
+*   **Kích thước (Size):** Proto **nhỏ hơn khoảng 3 lần** so với JSON.
+*   **Tốc độ Tuần tự hóa (Serialization):** Proto **nhanh hơn đáng kể (>10 lần)** so với JSON, đặc biệt với dữ liệu nhỏ. Khi dữ liệu lớn hơn, khoảng cách này thu hẹp lại một chút nhưng Proto vẫn nhanh hơn.
+*   **Tốc độ Giải tuần tự hóa (Deserialization):** Proto thường **nhanh hơn một chút**, mặc dù sự khác biệt không lớn bằng khi tuần tự hóa.
+
+*(Lưu ý: Kết quả benchmark có thể thay đổi tùy thuộc vào cấu trúc dữ liệu cụ thể, thư viện sử dụng và môi trường thực thi.)*
+
+## Khi nào nên sử dụng JSON
+
+✅ **Public APIs (API công khai):**
+*   Khi bạn muốn các nhà phát triển bên ngoài dễ dàng tích hợp và sử dụng API của bạn mà không cần thêm công cụ phức tạp. JSON là tiêu chuẩn thực tế ở đây.
+
+✅ **Giao tiếp Frontend-Backend (Web):**
+*   Trình duyệt làm việc rất tốt với JSON. Đây là lựa chọn tự nhiên cho việc gửi và nhận dữ liệu giữa giao diện web và máy chủ.
+
+✅ **Phát triển nhanh & Dự án phụ (Quick Prototypes & Side Projects):**
+*   Khi cần tốc độ phát triển và khả năng gỡ lỗi dễ dàng. JSON không yêu cầu bước thiết lập schema hay sinh mã.
+
+✅ **Cấu hình (Configurations):**
+*   Đối với các tệp cấu hình hoặc cài đặt mà con người có thể cần xem hoặc chỉnh sửa thủ công, tính dễ đọc của JSON là một lợi thế lớn.
+
+## Khi nào nên sử dụng Protocol Buffers (Proto)
+
+✅ **Giao tiếp giữa các Microservices (Internal Microservices):**
+*   Trong kiến trúc backend nơi bạn kiểm soát các thành phần giao tiếp, tốc độ và kích thước nhỏ gọn của Proto là lý tưởng để tối ưu hiệu năng hệ thống.
+
+✅ **Ứng dụng di động hiệu năng cao (High-Performance Mobile Apps):**
+*   Trong các ứng dụng như chat, chia sẻ chuyến đi, nơi tốc độ mạng và việc tiết kiệm dung lượng dữ liệu quan trọng, Proto giúp cải thiện trải nghiệm người dùng.
+
+✅ **Hệ thống thời gian thực (Real-time Systems):**
+*   Gaming, giao dịch chứng khoán, cập nhật tỷ số trực tiếp – những nơi yêu cầu tốc độ tuần tự hóa/giải tuần tự hóa cực nhanh để giảm độ trễ.
+
+✅ **Thiết bị IoT (IoT Devices):**
+*   Với các cảm biến nhỏ gửi dữ liệu qua mạng bị hạn chế, việc giảm thiểu kích thước gói tin là rất quan trọng. Proto là lựa chọn tuyệt vời.
+
+## Kết luận: Không nhất thiết phải chọn một
+
+Bạn không cần phải "cưới" một định dạng duy nhất. Nhiều hệ thống trong thực tế sử dụng kết hợp cả hai:
+
+*   JSON cho các giao tiếp hướng ra bên ngoài hoặc cần con người đọc.
+*   Proto cho các giao tiếp nội bộ, yêu cầu hiệu năng cao giữa các máy.
+
+Hãy lựa chọn dựa trên đối tượng sẽ tiêu thụ dữ liệu của bạn và ưu tiên hàng đầu là gì (tốc độ, kích thước, hay tính dễ đọc).
+
+## Quy tắc ngón tay cái (Rule of Thumb)
+
+> **Nếu con người cần đọc/ghi dữ liệu dễ dàng, hãy ưu tiên JSON.**
+>
+> **Nếu hiệu quả (tốc độ, kích thước) giữa các máy là ưu tiên, hãy ưu tiên Proto.**
+
