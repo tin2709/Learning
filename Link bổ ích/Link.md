@@ -19,3 +19,5 @@
 10 https://svgl.app/: tạo svg logo bằng react,...
 
 11 https://www.reactbits.dev/: tạo animation cho react
+
+12 https://dbdiagram.io/d: vẽ ERD 
