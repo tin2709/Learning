@@ -17,3 +17,5 @@
 9 https://tools.ui-layouts.com/background-snippets: tạo shadow, mesh-gradient, clip-path
 
 10 https://svgl.app/: tạo svg logo bằng react,...
+
+11 https://www.reactbits.dev/: tạo animation cho react
