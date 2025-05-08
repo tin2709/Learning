@@ -1,4 +1,4 @@
-# Hướng dẫn Lựa chọn Cơ sở dữ liệu: SQL vs. NoSQL
+# 1 Hướng dẫn Lựa chọn Cơ sở dữ liệu: SQL vs. NoSQL
 
 ## Giới thiệu
 
@@ -328,7 +328,7 @@ Các triển khai `Memtable` hiện đại thường tối ưu hóa cho truy c�
 Hiểu rõ cách `Memtables` hoạt động, các tham số cấu hình liên quan và cách tối ưu hóa chúng là điều cần thiết cho các quản trị viên cơ sở dữ liệu và nhà phát triển ứng dụng muốn khai thác tối đa hiệu năng và độ tin cậy của hệ thống cơ sở dữ liệu của họ.
 ![alt text](image-2.png)
 
-# 2 Proto vs JSON: Khi nào nên dùng cái nào (và Tại sao)
+# 4 Proto vs JSON: Khi nào nên dùng cái nào (và Tại sao)
 
 Khi xây dựng các ứng dụng hiện đại – dù là di động, web hay backend – việc tuần tự hóa (serialisation) dữ liệu quan trọng hơn bạn nghĩ. Hai lựa chọn thường xuất hiện là JSON và Protocol Buffers (Proto).
 
@@ -402,3 +402,135 @@ Hãy lựa chọn dựa trên đối tượng sẽ tiêu thụ dữ liệu của
 >
 > **Nếu hiệu quả (tốc độ, kích thước) giữa các máy là ưu tiên, hãy ưu tiên Proto.**
 
+# 5 So sánh dbt và Tinybird: Xử lý Dữ liệu Thời gian Thực và API
+Sponsor by https://www.tinybird.co/blog-posts/dbt-in-real-time?ref=dailydev
+
+Phần này so sánh dbt và Tinybird, tập trung vào các điểm mạnh của Tinybird trong xử lý dữ liệu thời gian thực và phục vụ API, đồng thời cung cấp hướng dẫn cho người dùng dbt muốn chuyển đổi.
+
+## Được Xây dựng cho Xử lý Thời gian Thực
+
+*   **dbt:** Chủ yếu được thiết kế cho xử lý theo lô (batch processing). Mặc dù có thể chạy các tác vụ thời gian thực nếu cơ sở dữ liệu bên dưới hỗ trợ, nhưng đó không phải là trọng tâm chính của nó.
+*   **Tinybird:** Mọi thứ được thiết kế để hoạt động với dữ liệu thời gian thực. Tinybird cũng hỗ trợ xử lý theo lô, nhưng không toàn diện bằng dbt.
+
+## API là Công dân Hạng nhất
+
+*   **dbt:** dbt biến đổi dữ liệu cho các công cụ khác (như công cụ BI) hoặc quy trình khác. Xây dựng API thường đòi hỏi thêm một lớp khác: một dịch vụ Python (Flask/FastAPI), có thể là một bộ nhớ đệm cơ sở dữ liệu khác, tất cả đều truy vấn kho dữ liệu nơi dbt chạy. Điều này làm tăng số lượng thành phần, độ trễ và mã cần quản lý.
+*   **Tinybird:** Các "pipe" trong Tinybird chính là API. Bất kỳ truy vấn SQL nào (một node trong pipe) đều có thể được xuất bản dưới dạng một endpoint REST an toàn, có tham số và được giám sát chỉ với một lệnh (`tb deploy`). Điều này giúp đơn giản hóa đáng kể việc xây dựng các ứng dụng hoặc tính năng cần nhiều dữ liệu.
+
+## Đơn giản hóa Kiến trúc (Stack)
+
+*   **dbt:** dbt là bậc thầy của chữ "T" (Transformation) trong ELT. Bạn vẫn cần các công cụ riêng biệt cho việc nhập dữ liệu (E), tải dữ liệu (L), điều phối (Airflow, Dagster, Prefect), phục vụ API và giám sát chuyên biệt. Một kiến trúc dbt điển hình cho dữ liệu tươi phục vụ API nhanh (ví dụ: Kafka -> Flink/Spark -> Kho dữ liệu -> dbt -> API Framework -> Giám sát) rất phức tạp và tốn kém.
+*   **Tinybird:** Cung cấp một giải pháp thay thế tiềm năng tinh gọn hơn; nó xử lý việc nhập dữ liệu (Connectors, API), biến đổi thời gian thực (SQL pipes, materialized views), xuất bản API và khả năng quan sát (service data sources) trong một quy trình làm việc duy nhất, được quản lý qua `tb CLI` và `git`. Đối với một số trường hợp sử dụng, điều này giúp đơn giản hóa đáng kể kiến trúc hệ thống.
+
+## Tốc độ Vượt trội
+
+*   **dbt:** Hiệu suất hoàn toàn phụ thuộc vào kho dữ liệu bạn sử dụng (Snowflake, BigQuery, Redshift, v.v.). Đây là những công cụ mạnh mẽ, nhưng thường được tối ưu hóa cho các tác vụ phân tích rộng hơn, không nhất thiết phải là phản hồi API dưới mili giây ở phân vị thứ 99 (p99).
+*   **Tinybird:** Được xây dựng trên ClickHouse. ClickHouse rất nhanh đối với các loại truy vấn phân tích (lọc, tổng hợp, chuỗi thời gian) phục vụ dashboard và API, đặc biệt khi dữ liệu được cấu trúc đúng cách (sử dụng sorting keys!).
+
+## Ánh xạ các Khái niệm từ dbt sang Tinybird: Một Cách Tư duy Mới
+
+Di chuyển từ dbt sang Tinybird đòi hỏi một sự thay đổi trong tư duy. Dưới đây là hướng dẫn chuyển đổi khái niệm tương đương:
+
+| Khái niệm của dbt               | Tương đương trong Tinybird                 | Ghi chú                                                                                                |
+| :------------------------------ | :---------------------------------------- | :----------------------------------------------------------------------------------------------------- |
+| Dự án dbt (dbt Project)         | Dự án dữ liệu Tinybird (Tinybird Data Project) | Thư mục được quản lý bởi Git với các file cấu hình.                                                     |
+| `sources.yml`                   | file `.datasource`                        | Định nghĩa schema, ClickHouse engine, partition/sort keys. Quan trọng cho hiệu suất. Có thể bao gồm cấu hình nhập dữ liệu. |
+| Mô hình (`.sql` file)           | node trong Pipe (`.pipe` file)            | Một bước biến đổi SQL. Pipe nối các node. Ví dụ: `stg_*.sql` -> `intermediate_*.sql` -> `fct_*.sql` tương ứng với các node trong một hoặc nhiều file `.pipe`. |
+| `ref('model_name')`             | `FROM pipe_name`                          | Tham chiếu đến các dependency ở upstream.                                                              |
+| `source('src', 'tbl')`          | `FROM datasource_name`                    | Tham chiếu đến một bảng cơ sở được định nghĩa trong thư mục `datasources/`.                          |
+| Materialization (`table`, `incremental`)| Materialized view (`TYPE materialized` trong pipe) | Khái niệm cốt lõi. Xử lý dữ liệu tăng dần khi nhập. Thường nhắm mục tiêu AggregatingMergeTree.      |
+| Materialization (`view`)        | Node Pipe Tiêu chuẩn                      | Chỉ là định nghĩa truy vấn, chạy khi có yêu cầu.                                                        |
+| Materialization (`ephemeral`)   | Node Pipe Trung gian                      | Một node được sử dụng bởi các node khác nhưng không được truy vấn/materialized trực tiếp.                |
+| Jinja (`{{ }}`, `{% %}`)        | Hàm Template Tinybird (`{{ }}`, `{% %}`)  | Cú pháp tương tự, hàm khác nhau. Chủ yếu dùng cho tham số endpoint API, ít dùng cho tạo SQL động như trong dbt. |
+| Kiểm thử trong dbt (dbt Tests)  | Kiểm thử trong Tinybird (`tb test`, `.yml` file) | Chủ yếu tập trung vào kiểm thử phản hồi của endpoint API. Chất lượng dữ liệu thường được xây dựng trong pipe. |
+| `dbt run`, `dbt build`          | `tb deploy`, materialized views, copy pipes | `tb deploy` đẩy định nghĩa lên Tinybird. MVs tự động cập nhật. Copy pipes (`TYPE COPY`) cho các tác vụ theo lô/snapshot theo lịch. |
+| DAG của dbt                     | Ngầm định qua các mệnh đề `FROM` & MVs    | Tinybird quản lý các dependency dựa trên tham chiếu.                                                     |
+| Seeds                           | Fixtures (`fixtures/`), `tb datasource append` | Tải dữ liệu tĩnh cục bộ với fixtures, hoặc thêm vào qua CLI/API.                                     |
+
+Thay đổi lớn nhất từ dbt sang Tinybird là tư duy về materialized views cho bất kỳ thứ gì tăng dần hoặc tổng hợp, và thiết kế schema của datasource (đặc biệt là `ENGINE_SORTING_KEY`) ngay từ đầu để tối ưu hiệu suất truy vấn.
+
+## Chiến lược Di chuyển Từng bước
+
+Giả định bạn đã cài đặt và đăng nhập `tb CLI` (`tb login`), và đã khởi tạo một dự án (`tb create --folder my_tb_project && cd my_tb_project`). Hãy đảm bảo bạn đã chạy Tinybird local để kiểm thử: `tb local start`.
+
+### 1. Di chuyển Sources -> file `.datasource`
+
+Đối với mỗi bảng nguồn trong dbt cần thiết, tạo một file `.datasource` tương ứng (ví dụ: `datasources/my_source_table.datasource`).
+
+Một số lưu ý:
+
+*   **Schema:** Chuyển đổi kiểu dữ liệu cẩn thận. Tinybird sử dụng kiểu dữ liệu của ClickHouse (ví dụ: `String` thay vì `VARCHAR`, `DateTime64` thay vì `TIMESTAMP`). Tham khảo [Tinybird Data Types](https://docs.tinybird.co/data-types).
+*   **Engine & keys:** Đây là điểm rất quan trọng. `MergeTree` là phổ biến. `ReplacingMergeTree` nếu bạn cần cập nhật dựa trên khóa. `AggregatingMergeTree` cho đích của MV. Chọn `ENGINE_PARTITION_KEY` (thường dựa trên thời gian như `toYYYYMM(timestamp_col)`) và `ENGINE_SORTING_KEY` dựa trên các bộ lọc truy vấn phổ biến. Đừng bỏ qua bước này. Sorting key kém sẽ hủy hoại hiệu suất.
+*   **Cấu hình nhập dữ liệu:** Nếu Tinybird sẽ nhập dữ liệu từ nguồn kết nối (ví dụ: qua Kafka), thêm cấu hình connector vào đây. Nếu dữ liệu được điền bởi pipe khác (hoặc qua Events API / Data Sources API), bạn chỉ cần schema và engine.
+
+### 2. Di chuyển Models -> file `.pipe`
+
+Chuyển đổi các file `.sql` của dbt thành các file `.pipe` (ví dụ: `pipes/stg_pageviews.pipe`).
+
+Lưu ý:
+
+*   **Các phép biến đổi cơ bản:** Một mô hình dbt thường trở thành một node trong file `.pipe`. Sử dụng `FROM previous_node`, `FROM datasource_name`, hoặc `FROM other_pipe`.
+*   **Cú pháp SQL:** Sẽ có những thay đổi phổ biến, tùy thuộc vào nhà cung cấp cơ sở dữ liệu hiện tại của bạn:
+    *   Hàm ngày tháng: `toDate`, `toStartOfDay`, `addMinutes`, v.v.
+    *   JSON: `JSONExtractString`, `JSONExtractInt`, v.v.
+    *   Các hàm chuỗi có thể khác biệt.
+    *   Tham khảo [SQL Reference](https://docs.tinybird.co/sql-reference). Bạn sẽ dành thời gian ở đây.
+*   **Materialized views (phép màu tăng dần):** Nếu mô hình dbt của bạn là tăng dần (`incremental`), hãy sử dụng materialized view của Tinybird.
+    *   Định nghĩa một file `.datasource` đích (ví dụ: `datasources/user_daily_summary.datasource`) với engine thích hợp (`AggregatingMergeTree` cho tổng/đếm, `ReplacingMergeTree` cho trạng thái mới nhất). Schema nên bao gồm các cột trạng thái tổng hợp (ví dụ: `AggregateFunction(sum)`, `AggregateFunction(uniq)`).
+    *   Tạo một file `.pipe` (ví dụ: `materializations/mv_user_daily_summary.pipe`) chứa SQL biến đổi. Sử dụng các hàm trạng thái tổng hợp (`sumState`, `uniqState`, `argMaxState`).
+    *   Thêm `TYPE materialized` và `DATASOURCE target_datasource_name` vào node cuối cùng của pipe này.
+*   **Copies (Các bản sao):** Nếu bạn sử dụng một bảng đã được tổng hợp trước trong dbt (`materialized='table'`), bạn nên sử dụng copy pipes trong Tinybird.
+    *   Định nghĩa một file `.datasource` đích (ví dụ: `datasources/user_daily_summary.datasource`) với engine thích hợp (`MergeTree`, `ReplacingMergeTree`...).
+    *   Tạo một file `.pipe` (ví dụ: `copies/daily_summary.pipe`) chứa SQL biến đổi.
+    *   Thêm `TYPE copy` và `DATASOURCE target_datasource_name` vào node cuối cùng của pipe này.
+    *   Tùy chọn đặt lịch (`schedule`) và chế độ sao chép (`copy_mode`: `append` hoặc `replace`).
+
+### 3. Xuất bản APIs -> `TYPE endpoint`
+
+Đây thường là mục tiêu cuối cùng. Biến node cuối cùng của pipe truy vấn của bạn thành một endpoint:
+
+*   Thêm `TYPE endpoint`.
+*   Định nghĩa các tham số URL bằng cách sử dụng `{{ DateType(param_name, default_value) }}`.
+
+Deploy (`tb --cloud deploy`) và API của bạn sẽ hoạt động trực tuyến.
+
+### 4. Di chuyển Tests -> `tb test`
+
+Chuyển đổi các kiểm thử của dbt sang kiểm thử của Tinybird:
+
+*   **Kiểm thử Endpoint (phổ biến nhất):** Nếu Pipe của bạn kết thúc bằng `TYPE endpoint`, sử dụng `tb test create <pipe_name>` để tạo file kiểm thử `.yml` trong thư mục `tests/`. Chạy endpoint với các tham số (ví dụ: qua `curl` hoặc `tb endpoint`) và sử dụng `tb test update <pipe_name>` để ghi lại đầu ra làm kết quả mong đợi. Xem [Test Files](https://docs.tinybird.co/test-files).
+*   **Kiểm tra chất lượng dữ liệu:** Thường được tích hợp trực tiếp vào logic pipe. Sử dụng `throwIf(count() > 0)` trong một node, hoặc tạo các node cụ thể để lọc/đánh dấu dữ liệu xấu. Bạn cũng có thể tạo các file `.pipe` riêng để chạy các kiểm tra và khẳng định kết quả trong một kiểm thử.
+
+### 5. Điều phối (Orchestration) -> MVs, copy pipes, deployment
+
+*   **Deployment:** `tb deploy` đẩy các định nghĩa lên Tinybird.
+*   **Thời gian thực:** Materialized views xử lý các cập nhật tăng dần tự động. Không cần bộ lập lịch bên ngoài cho luồng liên tục này.
+*   **Theo lô theo lịch:** Đối với các tác vụ cần chạy định kỳ (như `dbt run` hoặc snapshot), sử dụng copy pipes. Thêm `TYPE copy` và `COPY_SCHEDULE 'cron syntax'` (ví dụ: `'0 * * * *'` cho chạy hàng giờ) vào một node pipe. Xem [Copy Pipes](https://docs.tinybird.co/copy-pipes).
+*   **Kích hoạt bên ngoài:** Cần logic phức tạp hơn? Kích hoạt một tác vụ Tinybird (một copy pipe theo yêu cầu) qua API của nó từ Airflow, GitHub Actions, Trigger.dev, v.v.
+
+## Những Cạm bẫy Tiềm ẩn
+
+*   **Rắc rối cú pháp SQL:** Dành thời gian để dịch các hàm, đặc biệt là logic ngày phức tạp, thao tác mảng/JSON hoặc window functions (ClickHouse hỗ trợ tốt, nhưng cú pháp khác biệt). Kiểm thử kỹ lưỡng.
+*   **Tư duy về Materialized View:** Nghĩ theo hướng tăng dần là chìa khóa. Thiết kế schema đích của MV (`AggregatingMergeTree`, các state) và logic biến đổi cần luyện tập. Debug MVs có thể khó hơn các tác vụ theo lô.
+*   **Thiết kế Sorting Key:** Quên định nghĩa hoặc chọn `ENGINE_SORTING_KEY` kém trong các file `.datasource` sẽ dẫn đến các truy vấn chậm, đặc biệt khi dữ liệu tăng lên. Đây là vấn đề liên quan đến cơ sở dữ liệu nhiều hơn là framework, nhưng rất quan trọng phải tính đến.
+*   **Phức tạp leo thang trong Pipes:** Mặc dù pipes cho phép nối chuỗi các node SQL, nhưng các pipes quá phức tạp, dài hàng trăm dòng trở nên khó debug và quản lý. Hãy chia nhỏ mọi thứ một cách logic.
+
+## Giám sát có chút Khác biệt
+
+Hãy quên việc chỉ kiểm tra xem lệnh `dbt run` có thành công hay không. Trong Tinybird, bạn cần giám sát luồng dữ liệu liên tục:
+
+*   `datasources_ops_log`: Giám sát tốc độ nhập dữ liệu, lỗi cho nguồn API/Kafka.
+*   `pipe_stats_rt`: Kiểm tra độ trễ của endpoint (p50, p95, p99), số hàng đã đọc, lỗi. Thiết yếu cho hiệu suất API.
+*   `jobs_log`: Giám sát các lần chạy Copy Pipe theo lịch.
+
+Học cách truy vấn các [service data sources](https://docs.tinybird.co/service-data-sources) này (`FROM tinybird.ds_name`) và tạo các endpoint (định dạng Prometheus đặc biệt hữu ích ở đây). Chúng là mắt và tai của bạn.
+
+## Bắt đầu Xây dựng với Tinybird!
+
+Nếu bạn đã đọc đến đây, có lẽ bạn muốn sử dụng Tinybird làm backend phân tích của mình. Bạn có thể bắt đầu ngay với gói miễn phí.
+
+[Đăng ký Tinybird](https://www.tinybird.co/signup)
+
+---
+
+*Phần nội dung này được chuyển đổi và viết lại từ một phần của bài đăng blog "Built for real-time processing..." về so sánh dbt và Tinybird.*
