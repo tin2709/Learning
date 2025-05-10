@@ -12,6 +12,7 @@ This document serves as a comprehensive guide covering various PostgreSQL featur
     *   [1.3 `pg_stat_statements` (Query Statistics)](#13-pg_stat_statements-query-statistics)
     *   [1.4 `pg_cron` (Job Scheduling)](#14-pg_cron-job-scheduling)
     *   [1.5 `pgcrypto` (Cryptography)](#15-pgcrypto-cryptography)
+    *   [1.6 `supautils` (Event trigger)](#16-supautils)
 2.  [Advanced Grouping (`GROUP BY` Clauses)](#2-advanced-grouping-group-by-clauses)
     *   [2.1 `GROUPING SETS`](#21-grouping-sets)
     *   [2.2 `CUBE`](#22-cube)
@@ -140,6 +141,182 @@ Provides cryptographic functions for hashing, encryption, and random data genera
     SELECT encode(digest('some sensitive data', 'sha256'), 'hex');
     SELECT encode(digest('email@example.com', 'md5'), 'hex');
     ```
+
+### 1.6 `supautils` (Event trigger) Event Trigger cho người dùng thông thường
+
+Bài viết này giải thích một trong những tính năng của extension `supautils` cho phép người dùng PostgreSQL không có quyền `superuser` vẫn có thể tạo và sử dụng Event Trigger một cách an toàn.
+
+## Vấn đề
+
+Event Trigger trong PostgreSQL là một tính năng rất mạnh mẽ, cho phép thực thi các hàm khi xảy ra các sự kiện trên cơ sở dữ liệu (ví dụ: kết thúc một lệnh DDL như `CREATE TABLE`).
+
+Tuy nhiên, theo mặc định, chỉ có vai trò `superuser` mới có quyền tạo Event Trigger. Điều này gây khó khăn trong nhiều môi trường, đặc biệt là các dịch vụ cơ sở dữ liệu đám mây được quản lý, nơi việc cấp quyền `superuser` cho người dùng ứng dụng hoặc thông thường là không thể hoặc tiềm ẩn rủi ro bảo mật nghiêm trọng.
+
+## Giải pháp trong supautils
+
+Extension `supautils` giải quyết vấn đề này bằng cách sử dụng sự mở rộng của PostgreSQL, cụ thể là kết hợp **Utility Hook** và **Function Manager Hook**, cùng với khái niệm **"Vai trò đặc quyền" (Privileged Role)**.
+
+### Vai trò Đặc quyền (Privileged Role)
+
+ cốt lõi của giải pháp là "Vai trò đặc quyền". Đây là một vai trò được cấu hình trong `supautils` để hoạt động như một **proxy** cho `superuser`. Nó cung cấp một **tập hợp con an toàn** các khả năng của `superuser` mà người dùng thông thường có thể truy cập.
+
+### Cách tạo Event Trigger (Sử dụng Utility Hook)
+
+1.  Khi một người dùng sử dụng "Vai trò đặc quyền" (ví dụ: `SET ROLE privileged_role;`) và thực hiện lệnh `CREATE EVENT TRIGGER ...`.
+2.  `supautils` sử dụng **Utility Hook (ProcessUtility_hook)** để chặn câu lệnh này.
+3.  Bên trong hook, quyền của session **tạm thời được nâng lên** thành `superuser` chỉ để thực thi lệnh `CREATE EVENT TRIGGER`.
+4.  PostgreSQL Core xử lý và tạo Event Trigger thành công.
+5.  Sau khi tạo xong, quyền của session được **hạ cấp trở lại** "Vai trò đặc quyền" và vai trò này được đặt làm **chủ sở hữu (owner)** của Event Trigger vừa tạo.
+
+### Vấn đề Leo thang Đặc quyền (Privilege Escalation)
+
+Việc cho phép tạo Event Trigger theo cách trên vẫn chưa đủ an toàn. Event Trigger, khi được kích hoạt:
+*   Nó nhắm mục tiêu đến *mọi* vai trò.
+*   Nó chạy bằng **đặc quyền của vai trò mục tiêu** (vai trò đã kích hoạt trigger).
+
+Điều này có nghĩa là: nếu một `superuser` vô tình kích hoạt một Event Trigger do người dùng thông thường tạo, hàm của trigger sẽ chạy với quyền `superuser`. Một kẻ tấn công có thể lợi dụng điều này để tạo một hàm trigger độc hại (ví dụ: `ALTER ROLE attacker SUPERUSER;`) và đạt được quyền `superuser` khi một superuser kích hoạt trigger đó.
+
+### Ngăn chặn Leo thang Đặc quyền (Sử dụng Function Manager Hook)
+
+Để giải quyết vấn đề leo thang đặc quyền, `supautils` sử dụng **Function Manager Hook (fmgr_hook)**.
+
+1.  Hook này cho phép `supautils` chặn và sửa đổi việc thực thi của các hàm.
+2.  Khi một Event Trigger do người dùng tạo chuẩn bị thực thi hàm của nó, `supautils` sẽ kiểm tra vai trò đang kích hoạt trigger.
+3.  Nếu vai trò kích hoạt là `superuser` hoặc một trong các "vai trò dành riêng" (reserved roles) được cấu hình (thường dùng cho các dịch vụ quản lý như `pgbouncer`), `supautils` sẽ **thay thế việc gọi hàm trigger bằng một hàm "noop"** (một hàm không làm gì cả, ví dụ: sử dụng hàm `version()` của Postgres).
+4.  Điều này đảm bảo rằng hàm trigger độc hại sẽ không bao giờ được thực thi với quyền `superuser`, ngăn chặn việc leo thang đặc quyền.
+5.  Nếu vai trò kích hoạt là người dùng thông thường, hàm trigger sẽ được phép thực thi bình thường, nhưng nó sẽ chỉ chạy với đặc quyền của người dùng đó, không gây rủi ro bảo mật.
+
+### Ví dụ sử dụng cho người dùng
+
+Với `supautils`, người dùng thông thường có thể tạo Event Trigger như sau:
+
+```sql
+-- Chuyển sang vai trò đặc quyền đã cấu hình (ví dụ: vai trò có tên 'postgres')
+SET ROLE postgres;
+
+-- Kiểm tra xem đây có phải là superuser không (kết quả sẽ là 'off')
+SELECT current_setting('is_superuser');
+--  current_setting
+-- -----------------
+--  off
+-- (1 row)
+
+-- Tạo hàm cho event trigger
+CREATE FUNCTION show_current_user()
+RETURNS event_trigger AS $$
+BEGIN
+  RAISE NOTICE 'the event trigger is executed for %', current_user;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Tạo event trigger sử dụng vai trò đặc quyền
+CREATE EVENT TRIGGER myevtrig ON ddl_command_end
+EXECUTE PROCEDURE show_current_user();
+
+-- Bây giờ, khi các vai trò khác nhau thực hiện lệnh DDL, trigger sẽ chạy:
+
+-- Sử dụng vai trò đặc quyền vừa tạo trigger
+CREATE TABLE foo();
+-- NOTICE:  the event trigger is executed for postgres
+
+-- Chuyển sang vai trò người dùng thông thường
+SET ROLE myrole;
+CREATE TABLE bar();
+-- NOTICE:  the event trigger is executed for myrole
+
+-- Lưu ý: Nếu một superuser thực hiện lệnh DDL, trigger này sẽ BỊ BỎ QUA bởi supautils
+-- và hàm show_current_user sẽ không được thực thi, đảm bảo an toàn.
+```
+
+## Tương lai trong PostgreSQL Core
+
+Các nhà phát triển đã gửi các bản vá (patches) tới cộng đồng PostgreSQL để thảo luận về việc hỗ trợ Event Trigger cho người dùng thông thường trực tiếp trong phiên bản Core của PostgreSQL. Tính năng này, nếu được tích hợp, có thể sẽ có một số hạn chế so với cách triển khai hiện tại trong `supautils`.
+
+---
+
+Đây là mô tả chức năng Event Trigger cho người dùng thông thường trong extension `supautils`, dựa trên bài blog đã cung cấp.
+
+
+## Vấn đề
+
+Event Trigger trong PostgreSQL là một tính năng rất mạnh mẽ, cho phép thực thi các hàm khi xảy ra các sự kiện trên cơ sở dữ liệu (ví dụ: kết thúc một lệnh DDL như `CREATE TABLE`).
+
+Tuy nhiên, theo mặc định, chỉ có vai trò `superuser` mới có quyền tạo Event Trigger. Điều này gây khó khăn trong nhiều môi trường, đặc biệt là các dịch vụ cơ sở dữ liệu đám mây được quản lý, nơi việc cấp quyền `superuser` cho người dùng ứng dụng hoặc thông thường là không thể hoặc tiềm ẩn rủi ro bảo mật nghiêm trọng.
+
+## Giải pháp trong supautils
+
+Extension `supautils` giải quyết vấn đề này bằng cách sử dụng sự mở rộng của PostgreSQL, cụ thể là kết hợp **Utility Hook** và **Function Manager Hook**, cùng với khái niệm **"Vai trò đặc quyền" (Privileged Role)**.
+
+### Vai trò Đặc quyền (Privileged Role)
+
+ cốt lõi của giải pháp là "Vai trò đặc quyền". Đây là một vai trò được cấu hình trong `supautils` để hoạt động như một **proxy** cho `superuser`. Nó cung cấp một **tập hợp con an toàn** các khả năng của `superuser` mà người dùng thông thường có thể truy cập.
+
+### Cách tạo Event Trigger (Sử dụng Utility Hook)
+
+1.  Khi một người dùng sử dụng "Vai trò đặc quyền" (ví dụ: `SET ROLE privileged_role;`) và thực hiện lệnh `CREATE EVENT TRIGGER ...`.
+2.  `supautils` sử dụng **Utility Hook (ProcessUtility_hook)** để chặn câu lệnh này.
+3.  Bên trong hook, quyền của session **tạm thời được nâng lên** thành `superuser` chỉ để thực thi lệnh `CREATE EVENT TRIGGER`.
+4.  PostgreSQL Core xử lý và tạo Event Trigger thành công.
+5.  Sau khi tạo xong, quyền của session được **hạ cấp trở lại** "Vai trò đặc quyền" và vai trò này được đặt làm **chủ sở hữu (owner)** của Event Trigger vừa tạo.
+
+### Vấn đề Leo thang Đặc quyền (Privilege Escalation)
+
+Việc cho phép tạo Event Trigger theo cách trên vẫn chưa đủ an toàn. Event Trigger, khi được kích hoạt:
+*   Nó nhắm mục tiêu đến *mọi* vai trò.
+*   Nó chạy bằng **đặc quyền của vai trò mục tiêu** (vai trò đã kích hoạt trigger).
+
+Điều này có nghĩa là: nếu một `superuser` vô tình kích hoạt một Event Trigger do người dùng thông thường tạo, hàm của trigger sẽ chạy với quyền `superuser`. Một kẻ tấn công có thể lợi dụng điều này để tạo một hàm trigger độc hại (ví dụ: `ALTER ROLE attacker SUPERUSER;`) và đạt được quyền `superuser` khi một superuser kích hoạt trigger đó.
+
+### Ngăn chặn Leo thang Đặc quyền (Sử dụng Function Manager Hook)
+
+Để giải quyết vấn đề leo thang đặc quyền, `supautils` sử dụng **Function Manager Hook (fmgr_hook)**.
+
+1.  Hook này cho phép `supautils` chặn và sửa đổi việc thực thi của các hàm.
+2.  Khi một Event Trigger do người dùng tạo chuẩn bị thực thi hàm của nó, `supautils` sẽ kiểm tra vai trò đang kích hoạt trigger.
+3.  Nếu vai trò kích hoạt là `superuser` hoặc một trong các "vai trò dành riêng" (reserved roles) được cấu hình (thường dùng cho các dịch vụ quản lý như `pgbouncer`), `supautils` sẽ **thay thế việc gọi hàm trigger bằng một hàm "noop"** (một hàm không làm gì cả, ví dụ: sử dụng hàm `version()` của Postgres).
+4.  Điều này đảm bảo rằng hàm trigger độc hại sẽ không bao giờ được thực thi với quyền `superuser`, ngăn chặn việc leo thang đặc quyền.
+5.  Nếu vai trò kích hoạt là người dùng thông thường, hàm trigger sẽ được phép thực thi bình thường, nhưng nó sẽ chỉ chạy với đặc quyền của người dùng đó, không gây rủi ro bảo mật.
+
+### Ví dụ sử dụng cho người dùng
+
+Với `supautils`, người dùng thông thường có thể tạo Event Trigger như sau:
+
+```sql
+-- Chuyển sang vai trò đặc quyền đã cấu hình (ví dụ: vai trò có tên 'postgres')
+SET ROLE postgres;
+
+-- Kiểm tra xem đây có phải là superuser không (kết quả sẽ là 'off')
+SELECT current_setting('is_superuser');
+--  current_setting
+-- -----------------
+--  off
+-- (1 row)
+
+-- Tạo hàm cho event trigger
+CREATE FUNCTION show_current_user()
+RETURNS event_trigger AS $$
+BEGIN
+  RAISE NOTICE 'the event trigger is executed for %', current_user;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Tạo event trigger sử dụng vai trò đặc quyền
+CREATE EVENT TRIGGER myevtrig ON ddl_command_end
+EXECUTE PROCEDURE show_current_user();
+
+-- Bây giờ, khi các vai trò khác nhau thực hiện lệnh DDL, trigger sẽ chạy:
+
+-- Sử dụng vai trò đặc quyền vừa tạo trigger
+CREATE TABLE foo();
+-- NOTICE:  the event trigger is executed for postgres
+
+-- Chuyển sang vai trò người dùng thông thường
+SET ROLE myrole;
+CREATE TABLE bar();
+-- NOTICE:  the event trigger is executed for myrole
+
+-- Lưu ý: Nếu một superuser thực hiện lệnh DDL, trigger này sẽ BỊ BỎ QUA bởi supautils
+-- và hàm show_current_user sẽ không được thực thi, đảm bảo an toàn.
 
 ---
 
