@@ -25,3 +25,5 @@
 13 Đổi từ github.com sang gitingest.com: gồm cấu trúc thư mục và nội dung của nó
 
 ![alt text](image.png)
+
+14 https://www.madewithvibe.com/?ref=dailydev: các tool ai hay sử dụng và các project khác
