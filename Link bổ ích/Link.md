@@ -40,3 +40,5 @@ trình và mẹo khi sử dụng Java.
 19 https://javax0.wordpress.com/ : Java Deep: Blog chuyên nghiên cứu sâu về các tính năng và vấn đề nâng cao trong java
 
 20 https://uihut.com : design resource(có tốn tiền chỉ xem thôi)
+
+21 https://trends.google.com/trends/?geo=VN : coi xem cái gì đang là trend các chủ đề khác nhau
