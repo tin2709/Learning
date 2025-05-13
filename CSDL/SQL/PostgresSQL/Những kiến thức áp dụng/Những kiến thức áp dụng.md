@@ -645,4 +645,398 @@ Với khả năng lập chỉ mục đảo ngược, tối ưu hóa truy vấn d
 
 ---
 *(Đây là bản viết lại và tóm tắt từ bài viết gốc tiếng Anh)*
+
+# 3 Kết hợp Tìm kiếm Ngữ nghĩa (Semantic Search) và Tìm kiếm Toàn văn (Full-Text Search) trong PostgreSQL
+Sponsor by https://www.timescale.com/blog/combining-semantic-search-and-full-text-search-in-postgresql-with-cohere-pgvector-and-pgai?ref=dailydev
+
+*(Với Cohere, Pgvector, và Pgai)*
+
+*Bài viết gốc: James Reed, Infrastructure Engineer · Leapcell*
+*Ngày: 09 tháng 5 năm 2025*
+*(Viết lại từ bài viết tiếng Anh)*
+
+*Trong trường hợp bạn đã bỏ lỡ buổi ra mắt pgai Vectorizer, hãy tìm hiểu lý do tại sao cơ sở dữ liệu vector là một trừu tượng hóa không phù hợp và cách bạn có thể tạo các vector nhúng AI ngay trong cơ sở dữ liệu PostgreSQL của mình.*
+
+---
+
+## Cấu trúc Tìm kiếm Lai (Hybrid Search) với Cohere, pgvector, và pgai
+
+Công nghệ tìm kiếm là xương sống của các hệ thống truy xuất dữ liệu hiện đại. Qua nhiều năm, chúng đã phát triển từ việc chỉ đơn giản là khớp từ khóa sang các thuật toán tìm kiếm ngữ nghĩa nắm bắt ngữ cảnh và ý định người dùng.
+
+Tuy nhiên, bạn thường gặp phải những tình huống mà một phương pháp tìm kiếm duy nhất không đủ. Hãy tưởng tượng truy vấn tìm kiếm sau: "Các nghiên cứu gần đây về tác động của biến đổi khí hậu đối với động vật hoang dã Bắc Cực." Phương pháp khớp từ khóa sẽ truy xuất các tài liệu chứa các từ cụ thể như "biến đổi khí hậu" và "động vật hoang dã Bắc Cực", trong khi tìm kiếm ngữ nghĩa có thể giúp xác định các nghiên cứu liên quan ngay cả khi không có các từ khóa chính xác, chẳng hạn như các bài viết về "ảnh hưởng của biến đổi khí hậu đối với gấu Bắc Cực".
+
+Do đó, phương pháp mới là kết hợp tìm kiếm toàn văn (full-text search) để truy xuất chính xác với tìm kiếm ngữ nghĩa (semantic search) để có độ liên quan cao hơn. Mô hình này được gọi là tìm kiếm lai (hybrid search), và nó mang lại những ưu điểm tốt nhất của cả hai phương pháp. Trong bài viết này, chúng ta sẽ giải thích cách triển khai tìm kiếm lai trong PostgreSQL bằng cách sử dụng Cohere, pgvector và pgai (cùng với một số đổi mới khác từ Timescale). Điều này sẽ cho phép bạn xây dựng một hệ thống tìm kiếm nhanh, liên quan và chính xác bằng cách sử dụng cơ sở dữ liệu PostgreSQL hiện có của mình.
+
+## 01. Hiểu về Tìm kiếm Toàn văn và Tìm kiếm Ngữ nghĩa
+
+Trước khi đi sâu vào triển khai, hãy xem xét sự khác biệt giữa tìm kiếm toàn văn và tìm kiếm ngữ nghĩa.
+
+### Tìm kiếm Toàn văn (Full-text search)
+
+Tìm kiếm toàn văn, hay tìm kiếm từ khóa, tìm các kết quả khớp chính xác với các từ khóa trong một truy vấn. Các thuật toán tìm kiếm toàn văn lập chỉ mục các tài liệu văn bản bằng cách chia chúng thành các thuật ngữ (terms) và tạo ra một chỉ mục đảo ngược (inverted index) ánh xạ các thuật ngữ đến vị trí của chúng trong các tài liệu. Trong quá trình tìm kiếm, thuật toán truy xuất các tài liệu liên quan bằng cách khớp các thuật ngữ trong truy vấn với chỉ mục và xếp hạng kết quả bằng các thuật toán như TF-IDF hoặc BM25.
+
+Những ngành công nghiệp nào sử dụng tìm kiếm toàn văn? Các trang thương mại điện tử sử dụng nó để giúp khách hàng tìm sản phẩm; các ứng dụng thị trường chứng khoán sử dụng nó để giúp người dùng tìm ký hiệu mã chứng khoán; các trang web tin tức sử dụng nó để hiển thị các bài viết liên quan; các hệ thống chăm sóc sức khỏe sử dụng nó để tìm hồ sơ bệnh nhân.
+
+Mặc dù có tính hữu ích, tìm kiếm toàn văn có một số hạn chế nhất định. Vì nó không nắm bắt được ý định người dùng, nó thường dẫn đến kết quả không liên quan. Ví dụ, một tìm kiếm toàn văn với truy vấn “apple phone” có thể truy xuất kết quả về quả táo (apple - trái cây) và thậm chí cả điện thoại Android.
+
+*Ảnh minh họa: Minh họa đơn giản về điểm TF-IDF, tính toán mức độ liên quan của một từ đối với văn bản tài liệu.*
+
+### Tìm kiếm Ngữ nghĩa (Semantic search)
+
+Tìm kiếm ngữ nghĩa vượt ra ngoài việc chỉ khớp từ khóa; nó hiểu nghĩa của từ và cách chúng liên quan đến nhau thông qua các vector. Vector là các biểu diễn số được tạo ra bởi các mô hình AI, nắm bắt ý nghĩa ngữ cảnh và mối quan hệ giữa các từ. Điều này cho phép tìm kiếm ngữ nghĩa tìm thấy kết quả liên quan ngay cả khi không có các từ khóa chính xác.
+
+Tìm kiếm ngữ nghĩa có ứng dụng trong nhiều lĩnh vực. Bạn có thể sử dụng nó để xây dựng hệ thống tìm kiếm và đề xuất sản phẩm bằng cách tìm các sản phẩm liên quan dựa trên truy vấn người dùng. Bạn có thể tận dụng nó cho bộ phận hỗ trợ khách hàng bằng cách sử dụng nó để diễn giải chính xác truy vấn người dùng. Trong chăm sóc sức khỏe, bạn có thể sử dụng nó để khớp truy vấn bệnh nhân với thông tin y tế liên quan.
+
+Trong nhiều kịch bản, tìm kiếm ngữ nghĩa là lựa chọn tốt hơn so với tìm kiếm từ khóa. Vì nó có thể nắm bắt ý nghĩa đằng sau các truy vấn, nó có thể hiểu các thuật ngữ liên quan hoặc thậm chí các khái niệm liên quan trên các ngôn ngữ khác nhau. Điều này thường dẫn đến kết quả tìm kiếm liên quan hơn.
+
+*Ảnh minh họa: Sơ đồ minh họa việc chuyển đổi tài liệu thành vector nhúng và tìm kiếm ngữ nghĩa trong không gian vector đa chiều.*
+
+## 02. Giới thiệu Tìm kiếm Lai (Hybrid Search)
+
+Nếu tìm kiếm ngữ nghĩa hoạt động tốt hơn tìm kiếm toàn văn trong việc hiểu truy vấn người dùng, tại sao bạn lại cần phương pháp thứ hai? Hầu hết các lĩnh vực có từ vựng, viết tắt, chú thích, ký hiệu hoặc tên gọi cụ thể mà các mô hình ngữ nghĩa có thể không nắm bắt được. Tìm kiếm từ khóa đảm bảo rằng các thuật ngữ cụ thể này không bị bỏ sót.
+
+Vì vậy, bất cứ khi nào bạn cần kết hợp các kết quả khớp chính xác với các kết quả liên quan theo ngữ cảnh, sử dụng tìm kiếm lai sẽ mang lại kết quả tốt hơn.
+
+Hãy lấy một ví dụ từ lĩnh vực tài chính. Sử dụng tìm kiếm lai, một truy vấn như “tin tức và dự đoán AAPL” sẽ truy xuất các tài liệu chứa thuật ngữ “AAPL”, cùng với các tài liệu khác liên quan đến tin tức thị trường chứng khoán của Apple.
+
+Tìm kiếm lai cho phép bạn kết hợp độ chính xác của tìm kiếm từ khóa với khả năng hiểu ngữ cảnh của tìm kiếm vector. Điều này đảm bảo kết quả vừa chính xác vừa liên quan theo ngữ cảnh. Nó cũng thích ứng với nhiều loại truy vấn khác nhau, từ các thuật ngữ kỹ thuật cụ thể đến các tìm kiếm rộng hơn.
+
+### Các trường hợp sử dụng của tìm kiếm lai
+
+Do tính linh hoạt của nó, tìm kiếm lai có thể được sử dụng trong nhiều ngành công nghiệp:
+
+*   **Thương mại điện tử:** Giúp khách hàng tìm sản phẩm bằng cả các thuật ngữ cụ thể và mô tả chung, cải thiện khả năng khám phá sản phẩm.
+*   **Nghiên cứu pháp lý:** Cho phép luật sư tìm các vụ án liên quan bằng cả thuật ngữ pháp lý chính xác và các tiền lệ tương tự về mặt khái niệm.
+*   **Xem xét tài liệu khoa học:** Hỗ trợ các nhà nghiên cứu tìm các bài báo có thuật ngữ kỹ thuật cụ thể đồng thời khám phá các công trình có chủ đề liên quan.
+*   **Các công cụ tìm kiếm:** Một ví dụ tuyệt vời là nghiên cứu điển hình của Stack Overflow. Tìm kiếm lai mới kết hợp sự liên quan về ngữ nghĩa với việc khớp mã chính xác, cho phép nó tìm nội dung liên quan về mặt khái niệm đồng thời đáp ứng các đoạn mã cụ thể do người dùng nhập.
+*   **Hỗ trợ khách hàng:** Nâng cao khả năng hiểu và phản hồi của hệ thống hỗ trợ đối với nhiều loại yêu cầu của khách hàng.
+
+## 03. Triển khai Tìm kiếm Lai với Cohere, Pgvector, và Pgai
+
+*Ảnh minh họa: Sơ đồ các bước triển khai tìm kiếm lai.*
+
+Hãy cùng xem các bước để triển khai tìm kiếm lai. Chúng ta sẽ sử dụng mô hình nhúng Cohere `embed-english-v3.0` và tận dụng các extension `pgvector` và `pgai` để đưa khả năng AI vào cơ sở dữ liệu PostgreSQL.
+
+*   **`embed-english-v3.0`:** Một mô hình nhúng văn bản từ Cohere được thiết kế để tạo ra các vector nhúng chất lượng cao từ văn bản.
+*   **`pgai`:** Cho phép tích hợp với các mô hình AI và cho phép bạn thực hiện các truy vấn hỗ trợ AI ngay trong cơ sở dữ liệu PostgreSQL. Mặc dù `pgai` cho phép bạn thực hiện các hoạt động AI phức tạp (bao gồm tạo vector nhúng văn bản), với `pgai Vectorizer`, bạn còn có thể tự động hóa quá trình tạo và quản lý các vector nhúng mà không cần rời khỏi môi trường cơ sở dữ liệu PostgreSQL của mình.
+*   **`pgvector`:** Cho phép bạn lưu trữ và truy vấn vector nhúng, kích hoạt các tìm kiếm ngữ nghĩa hiệu quả trên dữ liệu của bạn. Trong hướng dẫn này, chúng ta sử dụng `pgvectorscale`, extension này bổ sung hiệu suất truy vấn và khả năng mở rộng cho chức năng của `pgvector`, giúp tăng tốc cơ sở dữ liệu PostgreSQL của bạn để xử lý các tập dữ liệu lớn một cách dễ dàng.
+
+### Chuẩn bị
+
+Trước khi tiếp tục, bạn sẽ cần một khóa API từ Cohere. Lưu khóa API dưới dạng biến môi trường.
+
+Bạn cũng sẽ cần một thiết lập PostgreSQL hoạt động cùng với các extension `pgai` và `pgvector`. Bạn có thể cài đặt thủ công, sử dụng Docker container dựng sẵn hoặc đơn giản là sử dụng Timescale Cloud, nơi đã cài đặt sẵn `pgai` và `pgvector`.
+
+Cài đặt các thư viện cần thiết...
+
+```bash
+!pip install pandas pyarrow pgvector cohere psycopg2-binary
 ```
+
+...và sau đó import chúng.
+
+```python
+import pandas as pd
+import cohere
+import psycopg2
+import os
+import json # Cần thêm thư viện json cho phần reranking
+from ast import literal_eval
+```
+
+Tiếp theo, khởi tạo và thiết lập kết nối cơ sở dữ liệu PostgreSQL.
+
+```python
+conn = psycopg2.connect("postgres://<username>:<password>@<host>:<port>/<database>")
+```
+
+Chúng ta cũng cần bật các extension.
+
+```sql
+with conn:
+    with conn.cursor() as cursor:
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS vectorscale CASCADE;")
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS ai CASCADE;")
+```
+
+Để sử dụng Cohere trong psql, bạn nên làm như sau:
+
+```bash
+export COHERE_API_KEY=YOUR_API_KEY
+PGOPTIONS="-c ai.cohere_api_key=$COHERE_API_KEY"
+psql -d "postgres://postgres:password@localhost/postgres"
+```
+
+### Tải xuống tập dữ liệu
+
+Chúng ta đang sử dụng tập dữ liệu Cohere/Movies từ Hugging Face. Tải xuống tập dữ liệu và tạo một tệp CSV cho thuận tiện, sử dụng một trăm dòng đầu tiên từ tập dữ liệu.
+
+```python
+# Tải tập dữ liệu
+df = pd.read_parquet("hf://datasets/Cohere/movies/movies.parquet")
+df = df.head(100)
+df.to_csv('movies.csv', index=False)
+```
+
+Tập dữ liệu có các trường sau cho mỗi 'bộ phim':
+
+| Trường    | Mô tả                                                      |
+| :-------- | :--------------------------------------------------------- |
+| `title`   | Một chuỗi chứa tiêu đề của bộ phim                         |
+| `overview`| Một chuỗi chứa mô tả tóm tắt về bộ phim                  |
+| `genres`  | Một chuỗi chứa danh sách thể loại (ngăn cách bằng dấu phẩy)|
+| `producer`| Một chuỗi chứa danh sách nhà sản xuất (ngăn cách bằng dấu phẩy)|
+| `cast`    | Một chuỗi chứa danh sách diễn viên (ngăn cách bằng dấu phẩy)|
+
+Đối với ví dụ tìm kiếm lai của chúng ta, chúng ta sẽ sử dụng kết hợp các trường `title` và `overview`.
+
+### Tạo bảng
+
+Bây giờ chúng ta sẽ tạo bảng, điền dữ liệu vào đó, và sau đó tạo các vector nhúng bằng hàm `cohere_embed` và mô hình nhúng `embed-english-v3.0`.
+
+Hai bước đầu tiên rất đơn giản: chúng ta sẽ sử dụng các truy vấn SQL để tạo bảng “movies” với một cột `embedding` để lưu trữ các vector nhúng. Sau đó, chúng ta điền dữ liệu vào bảng từ tệp CSV của mình.
+
+Cuối cùng, chúng ta tạo các vector nhúng. Để làm điều này, chúng ta sẽ sử dụng hàm `pgai` `cohere_embed`. Chỉ với một truy vấn SQL, `pgai` cho phép chúng ta tạo các vector nhúng và lưu trữ chúng trong cột `embedding`.
+
+```python
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+
+def ingest_data(conn):
+    with conn:
+        with conn.cursor() as cur:
+            # Tạo bảng
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS movies (
+                title TEXT NOT NULL,
+                overview TEXT,
+                genres TEXT,
+                producer TEXT,
+                "cast" TEXT,
+                embedding VECTOR(1024)
+            )
+            """)
+
+            # Sao chép dữ liệu từ tệp CSV
+            with open('movies.csv', 'r') as f:
+                cur.copy_expert('COPY movies(title, overview, genres, producer, "cast") FROM STDIN WITH CSV HEADER', f)
+
+            # Cập nhật vector nhúng
+            with conn.cursor() as cursor:
+                # Sử dụng cohere_embed để tạo vector nhúng
+                cursor.execute("""
+                UPDATE movies
+                SET embedding = ai.cohere_embed(
+                    'embed-english-v3.0'
+                    , CONCAT_WS('. ',
+                        title,
+                        COALESCE(overview, '')
+                    )
+                    , input_type=>'search_document'
+                    , api_key=>%s
+                ) where embedding is null;
+                """, (COHERE_API_KEY, ))
+
+ingest_data(conn)
+```
+
+Tại thời điểm này, bạn nên có một bảng dữ liệu với các vector nhúng được tạo từ các cột `title` và `overview`.
+
+## 04. Triển khai Tìm kiếm Từ khóa (Keyword Search)
+
+Tiếp theo, chúng ta sẽ triển khai tìm kiếm từ khóa.
+
+Các toán tử tìm kiếm truyền thống như `~`, `~*`, `LIKE`, và `ILIKE` rất đơn giản: chúng không thể xử lý các từ phái sinh, không xếp hạng kết quả và thiếu hỗ trợ chỉ mục. Để khắc phục những hạn chế này, PostgreSQL đã giới thiệu các kiểu dữ liệu `tsquery` và `tsvector` cho khả năng tìm kiếm văn bản nâng cao hơn. Chúng ta sẽ sử dụng những kiểu này để thực hiện tìm kiếm từ khóa của mình:
+
+```python
+def keyword_search(conn, query):
+    sql = """
+    SELECT title, overview
+    FROM movies, plainto_tsquery('english', %s) query
+    WHERE to_tsvector('english', title || ' ' || COALESCE(overview, '')) @@ query
+    ORDER BY ts_rank_cd(to_tsvector('english', title || ' ' || COALESCE(overview, '')), query) DESC
+    LIMIT 5
+    """
+
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (query,))
+            return cur.fetchall()
+```
+
+Dưới đây là phân tích chi tiết câu lệnh SQL:
+
+*   `plainto_tsquery` chuyển văn bản thuần túy thành một `tsquery` (truy vấn tìm kiếm văn bản).
+*   `to_tsvector('english', ...)` chuyển tiêu đề và mô tả được nối lại thành một `tsvector` (vector tìm kiếm văn bản).
+*   `@@` là toán tử khớp tìm kiếm văn bản.
+*   `ts_rank_cd()` là một hàm xếp hạng các kết quả khớp và sắp xếp kết quả theo thứ tự giảm dần.
+
+Bạn có thể kiểm tra hàm bằng cách truyền một truy vấn.
+
+```python
+query = "The Avengers"
+results = keyword_search(conn, query)
+
+# In results
+# for r in results:
+#     print(r)
+```
+
+Kết quả sẽ chứa các kết quả khớp từ khóa chính xác từ bảng “movies”.
+
+```
+[('Avengers: Age of Ultron', 'When Tony Stark tries to jumpstart a dormant peacekeeping program, things go awry and Earth\'s Mightiest Heroes are put to the ultimate test as the fate of the planet hangs in the balance. As the villainous Ultron emerges, it is up to The Avengers to stop him from enacting his terrible plans, and soon uneasy alliances and unexpected action pave the way for an epic and unique global adventure.'), ('The Avengers', 'When an unexpected enemy emerges and threatens global safety and security, Nick Fury, director of the international peacekeeping agency known as S.H.I.E.L.D., finds himself in need of a team to pull the world back from the brink of disaster. Spanning the globe, a daring recruitment effort begins!'), ('Captain America: Civil War', 'Following the events of Age of Ultron, the collective governments of the world pass an act designed to regulate all superhuman activity. This polarizes opinion amongst the Avengers, causing two factions to side with Iron Man or Captain America, which causes an epic battle between former allies.'), ('Captain America: The Winter Soldier', 'After the cataclysmic events in New York with The Avengers, Steve Rogers, aka Captain America is living quietly in Washington, D.C. and trying to adjust to the modern world. But when a S.H.I.E.L.D. colleague comes under attack, Steve becomes embroiled in a web of intrigue that threatens to put the world at risk. Joining forces with the Black Widow, Captain America struggles to expose the ever-widening conspiracy while fighting off professional assassins sent to silence him at every turn. When the full scope of the villainous plot is revealed, Captain America and the Black Widow enlist the help of a new ally, the Falcon. However, they soon find themselves up against an unexpected and formidable enemy--the Winter Soldier.')]
+```
+
+## 05. Triển khai Tìm kiếm Ngữ nghĩa (Semantic Search)
+
+Tiếp theo, hãy xây dựng khả năng tìm kiếm ngữ nghĩa. Trong tìm kiếm ngữ nghĩa, chúng ta trước tiên chuyển truy vấn thành một vector nhúng bằng cách sử dụng hàm `cohere_embed` và mô hình nhúng tương tự mà chúng ta đã sử dụng trước đó. Sau đó, chúng ta sử dụng một độ đo khoảng cách (hoặc hàm khoảng cách) để tìm các vector nhúng từ bảng “movies” gần nhất với vector nhúng của truy vấn. Khoảng cách giữa một vector và vector truy vấn của chúng ta càng nhỏ, độ tương đồng càng cao.
+
+`pgvector` hỗ trợ một số độ đo khoảng cách:
+
+| Toán tử | Độ đo Khoảng cách         |
+| :------ | :------------------------ |
+| `<->`   | Khoảng cách L2            |
+| `<=>`   | Độ tương đồng Cosine      |
+| `<#>`   | Tích trong Âm (Negative Inner Product) |
+| `<+>`   | Khoảng cách L1            |
+
+Chúng ta sẽ sử dụng tích trong âm (`<#>`) trong truy vấn SQL của mình, được biểu diễn bởi toán tử `<=>` (lưu ý: `<=>` trong `pgvector` thực sự biểu diễn Cosine Distance, tức là 1 trừ Cosine Similarity, và sắp xếp theo `<=>` tăng dần tương đương với sắp xếp theo Cosine Similarity giảm dần. Tích trong âm `<#>` thì sắp xếp theo `<#>` tăng dần tương đương với sắp xếp theo Inner Product giảm dần). Ví dụ này dùng `<=>`.
+
+```python
+# Hàm tìm kiếm ngữ nghĩa
+def semantic_search(conn, query):
+    sql = """
+    WITH query_embedding AS (
+        SELECT ai.cohere_embed(
+            'embed-english-v3.0'
+            , %s
+            , input_type=>'search_query' -- Đã sửa lại tên tham số cho đúng với API
+            , api_key=>%s             -- Đã sửa lại tên tham số cho đúng với API
+        ) AS embedding
+    )
+    SELECT title, overview
+    FROM movies, query_embedding
+    ORDER BY movies.embedding <=> query_embedding.embedding
+    LIMIT 5
+    """
+
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (query, COHERE_API_KEY,))
+            return cur.fetchall()
+```
+
+Bạn có thể kiểm tra hàm tìm kiếm ngữ nghĩa bằng cách truyền một truy vấn.
+
+```python
+query = "Exciting space adventure movies"
+results = semantic_search(conn, query)
+
+# In results
+# for r in results:
+#     print(r)
+```
+
+Kết quả:
+
+```
+[('Interstellar', 'Interstellar chronicles the adventures of a group of explorers who make use of a newly discovered wormhole to surpass the limitations on human space travel and conquer the vast distances involved in an interstellar voyage.'), ('Transformers: Dark of the Moon', "Sam Witwicky takes his first tenuous steps into adulthood while remaining a reluctant human ally of Autobot-leader Optimus Prime. The film centers around the space race between the USSR and the USA, suggesting there was a hidden Transformers role in it all that remains one of the planet's most dangerous secrets."), ('Star Wars', 'Princess Leia is captured and held hostage by the evil Imperial forces in their effort to take over the galactic Empire. Venturesome Luke Skywalker and dashing captain Han Solo team together with the loveable robot duo R2-D2 and C-3PO to rescue the beautiful princess and restore peace and justice in the Empire.'), ('Avatar', 'In the 22nd century, a paraplegic Marine is dispatched to the moon Pandora on a unique mission, but becomes torn between following orders and protecting an alien civilization.'), ('The Martian', 'During a manned mission to Mars, Astronaut Mark Watney is presumed dead after a fierce storm and left behind by his crew. But Watney has survived and finds himself stranded and alone on the hostile planet. With only meager supplies, he must draw upon his ingenuity, wit and spirit to subsist and find a way to signal to Earth that he is alive.')]
+```
+
+Tiếp theo, hãy kết hợp tìm kiếm từ khóa và tìm kiếm ngữ nghĩa để tạo hàm tìm kiếm lai của chúng ta.
+
+## 06. Triển khai Tìm kiếm Lai (Hybrid Search)
+
+Chúng ta sẽ kết hợp kết quả của cả hai hàm tìm kiếm để triển khai tìm kiếm lai. Để sắp xếp kết quả theo độ liên quan, chúng ta sẽ sử dụng mô hình reranker của Cohere, `rerank-english-v3.0`.
+
+Các mô hình Reranker sắp xếp lại các kết quả bằng cách tính toán điểm liên quan giữa truy vấn và các đối tượng dữ liệu, sau đó sắp xếp chúng từ liên quan nhất đến ít liên quan nhất. Vì việc reranking tốn kém về mặt tính toán, chúng ta thường sử dụng nó ở giai đoạn cuối cùng sau khi tìm kiếm lai đã truy xuất một tập hợp kết quả ban đầu.
+
+```python
+def hybrid_search(conn, query):
+    sem_results = semantic_search(conn, query)
+    key_results = keyword_search(conn, query)
+
+    # Kết hợp kết quả và loại bỏ trùng lặp
+    combined_results = list({(title, overview) for title, overview in sem_results + key_results})
+
+    # Chuẩn bị tài liệu cho việc reranking
+    documents = [f"{title}. {overview}" for title, overview in combined_results]
+    # Chuẩn bị mảng JSON của các tài liệu
+    documents_json = json.dumps([{"text": doc} for doc in documents])
+
+    # Truy vấn SQL để reranking sử dụng pgai
+    sql = """
+    SELECT
+        x."index",
+        x.document->>'text' as "text",
+        x.relevance_score
+    FROM jsonb_to_recordset(
+        ai.cohere_rerank(
+            'rerank-english-v3.0',
+            %s,
+            %s::jsonb,
+            return_documents => true,
+            api_key=>%s
+        )->'results'
+    ) AS x("index" int, "document" jsonb, relevance_score float8)
+    ORDER BY relevance_score DESC
+    LIMIT 5;
+    """
+
+    reranked_results = []
+    with conn.cursor() as cur:
+        cur.execute(sql, (query, documents_json, COHERE_API_KEY,))
+        reranked_results = cur.fetchall()
+
+    # Ánh xạ kết quả đã rerank trở lại dữ liệu gốc
+    final_results = []
+    for result in reranked_results:
+        # Tìm index của tài liệu trong danh sách ban đầu
+        try:
+            index = documents.index(result[1])
+            final_results.append(combined_results[index])
+        except ValueError:
+            # Xử lý trường hợp tài liệu không tìm thấy (ví dụ: có lỗi trong quá trình)
+            print(f"Warning: Document text from reranking not found in combined_results: {result[1][:50]}...")
+            pass
+
+
+    return final_results
+```
+
+Hàm `cohere_rerank` sử dụng một mô hình ngôn ngữ để đánh giá độ liên quan của mỗi tài liệu đối với truy vấn và sau đó sắp xếp lại các tài liệu dựa trên điểm liên quan của chúng.
+
+### Kết quả
+
+Bây giờ chúng ta có thể sử dụng hàm tìm kiếm lai của mình để truy xuất các tài liệu tận dụng cả khớp từ khóa và tìm kiếm ngữ nghĩa.
+
+```python
+query = "Space adventure movies with advanced alien technology"
+results = hybrid_search(conn, query)
+
+# In results
+# for r in results:
+#     print(r)
+```
+
+Kết quả:
+
+```
+[('Interstellar', 'Interstellar chronicles the adventures of a group of explorers who make use of a newly discovered wormhole to surpass the limitations on human space travel and conquer the vast distances involved in an interstellar voyage.'), ('Avatar', 'In the 22nd century, a paraplegic Marine is dispatched to the moon Pandora on a unique mission, but becomes torn between following orders and protecting an alien civilization.'), ('Transformers: Dark of the Moon', "Sam Witwicky takes his first tenuous steps into adulthood while remaining a reluctant human ally of Autobot-leader Optimus Prime. The film centers around the space race between the USSR and the USA, suggesting there was a hidden Transformers role in it all that remains one of the planet's most dangerous secrets."), ('Indiana Jones and the Kingdom of the Crystal Skull', "Set during the Cold War, the Soviets - led by sword-wielding Irina Spalko - are in search of a crystal skull which has supernatural powers related to a mystical Lost City of Gold. After being captured and then escaping from them, Indy is coerced to head to Peru at the behest of a young man whose friend - and Indy's colleague - Professor Oxley has been captured for his knowledge of the skull's whereabouts."), ('Mission: Impossible - Ghost Protocol', 'In the 4th installment of the Mission Impossible series, Ethan Hunt (Cruise) and his team are racing against time to track down a dangerous terrorist named Hendricks (Nyqvist), who has gained access to Russian nuclear launch codes and is planning a strike on the United States. An attempt to stop him ends in an explosion causing severe destruction to the Kremlin and the IMF to be implicated in the bombing, forcing the President to disavow them. No longer being aided by the government, Ethan and his team chase Hendricks around the globe, although they might still be too late to stop a disaster.')]
+```
+
+Điều này hoàn thành việc triển khai tìm kiếm lai của chúng ta trong PostgreSQL. Bạn có thể sử dụng phương pháp này để xây dựng các hệ thống tìm kiếm, Generation Tăng cường Truy xuất (RAG) hoặc các ứng dụng khác cần sử dụng truy xuất chính xác.
+
+## 07. Các Thực hành Tốt nhất cho Tìm kiếm Lai
+
+Trong bản demo trên, chúng ta đã triển khai tìm kiếm lai trong PostgreSQL. Đối với trường hợp sử dụng cụ thể của bạn, bạn có thể muốn tối ưu hóa phương pháp tiếp cận thêm bằng cách sử dụng một trong các phương pháp sau:
+
+*   **Cân bằng các phương pháp tìm kiếm:** Tìm sự cân bằng phù hợp giữa tìm kiếm ngữ nghĩa và tìm kiếm từ khóa. Tùy thuộc vào dữ liệu và trường hợp sử dụng của bạn, bạn có thể cần trọng số một phương pháp cao hơn phương pháp kia. Thử nghiệm với các kết hợp khác nhau để tìm sự kết hợp tối ưu.
+*   **Caching và tiền xử lý:** Triển khai các cơ chế caching cho các truy vấn được tìm kiếm thường xuyên hoặc dữ liệu được truy cập phổ biến. Tiền xử lý và lưu trữ các vector nhúng cho tìm kiếm ngữ nghĩa để giảm chi phí tính toán thời gian thực.
+*   **Đánh giá và tinh chỉnh:** Thường xuyên đánh giá hiệu suất của hệ thống tìm kiếm lai của bạn. Sử dụng các chỉ số như độ chính xác (precision), độ thu hồi (recall), và MAP (mean average precision) để đánh giá chất lượng tìm kiếm và thực hiện các điều chỉnh cần thiết.
+*   **Tận dụng pgvectorscale:** Đối với các tập dữ liệu lớn hơn, hãy cân nhắc sử dụng `pgvectorscale`, một extension của PostgreSQL tận dụng chỉ mục StreamingDiskANN và Định lượng nhị phân thống kê (Statistical Binary Quantization) để tăng tốc tìm kiếm tương đồng vector.
+
+## Các Bước Tiếp theo
+
+---
+*(Đây là bản viết lại và tóm tắt từ bài viết gốc tiếng Anh)*
