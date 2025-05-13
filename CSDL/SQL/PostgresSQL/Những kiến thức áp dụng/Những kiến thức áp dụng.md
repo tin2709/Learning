@@ -210,3 +210,439 @@ Pipeline này cung cấp cho bạn khả năng hiển thị theo thời gian th�
 ---
 
 **Dựa trên bài viết:** [Real-Time Order Tracking with Estuary, MotherDuck, and Hex using CDC](<link-to-original-article>) của Dani Palma.
+
+
+# 2 Sử dụng PostgreSQL như một Công cụ Tìm kiếm? Vâng, Có Thể Bạn Không Cần Đến Elasticsearch
+Sponsor by https://leapcell.io/blog/postgresql-as-search-engine?ref=dailydev
+
+*Bài viết gốc: James Reed, Infrastructure Engineer · Leapcell*
+*Ngày: 09 tháng 5 năm 2025*
+*(Viết lại từ bài viết tiếng Anh)*
+
+## Nguyên lý Chỉ mục Đảo ngược (Inverted Index)
+
+Chỉ mục đảo ngược bắt nguồn từ công nghệ công cụ tìm kiếm và được coi là nền tảng của chúng. Nhờ công nghệ chỉ mục đảo ngược, công cụ tìm kiếm có thể thực hiện các thao tác như tìm kiếm và xóa dữ liệu một cách hiệu quả. Trước khi đi sâu vào chỉ mục đảo ngược, chúng ta sẽ giới thiệu chỉ mục thuận (forward index) liên quan và so sánh hai loại này.
+
+### Chỉ mục Thuận (Forward Index)
+
+Trong một công cụ tìm kiếm, bảng chỉ mục thuận sử dụng ID tài liệu làm từ khóa, và bảng ghi lại thông tin vị trí của từng từ trong tài liệu. Khi tìm kiếm, hệ thống sẽ quét thông tin từ trong từng tài liệu trong bảng cho đến khi tìm thấy tất cả các tài liệu chứa từ khóa truy vấn.
+
+Cấu trúc của bảng chỉ mục thuận có thể được biểu diễn bằng sơ đồ sau:
+
+```
++---------------------+
+|   Bảng Chỉ mục Thuận  |
++---------------------+
+|  ID Tài liệu  |  Thông tin Vị trí |
++---------------------+
+|   Doc1   |  word1@3 |
+|          |  word2@7 |
++---------------------+
+|   Doc2   |  word1@2 |
+|          |  word3@5 |
++---------------------+
+|   Doc3   |  word2@4 |
+|          |  word4@6 |
++---------------------+
+```
+
+Phương pháp tổ chức này có cấu trúc tương đối đơn giản khi xây dựng chỉ mục, dễ dàng xây dựng và bảo trì. Do chỉ mục được xây dựng dựa trên tài liệu, nếu thêm một tài liệu mới, chỉ cần tạo một khối chỉ mục mới cho tài liệu này và gắn vào cuối tệp chỉ mục gốc; nếu xóa một tài liệu, thông tin chỉ mục tương ứng với ID tài liệu có thể được tìm thấy và xóa trực tiếp. Tuy nhiên, khi truy vấn, cần quét tất cả các tài liệu để đảm bảo không bỏ sót, điều này sẽ kéo dài đáng kể thời gian truy xuất và dẫn đến hiệu quả truy xuất thấp.
+
+Mặc dù nguyên tắc hoạt động của bảng chỉ mục thuận rất đơn giản, hiệu quả truy xuất của nó quá thấp và có ít giá trị thực tế trừ trong các tình huống cụ thể.
+
+### Chỉ mục Đảo ngược (Inverted Index)
+
+Bảng chỉ mục đảo ngược sử dụng các từ hoặc thuật ngữ làm từ khóa cho việc lập chỉ mục, và các mục nhập tương ứng với các từ khóa trong bảng ghi lại tất cả các tài liệu mà từ hoặc thuật ngữ này xuất hiện.
+
+Cấu trúc của bảng chỉ mục đảo ngược có thể được biểu diễn bằng sơ đồ sau:
+
+```
++---------------------+
+|   Bảng Chỉ mục Đảo ngược  |
++---------------------+
+|  Từ khóa   |  Danh sách Tài liệu |
++---------------------+
+|  word1    |  Doc1, Doc2 |
++---------------------+
+|  word2    |  Doc1, Doc3 |
++---------------------+
+|  word3    |  Doc2      |
++---------------------+
+|  word4    |  Doc3      |
++---------------------+
+```
+
+Vì số lượng tài liệu tương ứng với mỗi từ hoặc thuật ngữ thay đổi động, việc xây dựng và bảo trì bảng chỉ mục đảo ngược phức tạp hơn. Tuy nhiên, khi truy vấn, vì tất cả các tài liệu tương ứng với từ khóa truy vấn có thể được lấy ngay lập tức, hiệu quả cao hơn so với bảng chỉ mục thuận. Trong truy xuất toàn văn, phản hồi nhanh của truy xuất là một hiệu năng quan trọng. Mặc dù việc xây dựng chỉ mục tương đối chậm vì nó được thực hiện ngầm (trong nền), nó sẽ không ảnh hưởng đến hiệu quả của toàn bộ công cụ tìm kiếm.
+
+## Chỉ mục GIN trong PostgreSQL
+
+### Tổng quan
+
+GIN là viết tắt của **Generalized Inverted Index**, tức là chỉ mục đảo ngược tổng quát. Các giá trị của các kiểu dữ liệu mà nó xử lý không phải là nguyên tử mà được cấu tạo từ các phần tử, mà chúng ta gọi là kiểu dữ liệu phức hợp. Ví dụ, trong (hank, 15:3 21:4), nó có nghĩa là "hank" xuất hiện ở các vị trí 15:3 và 21:4. Phần sau sẽ giúp chúng ta hiểu rõ hơn về chỉ mục GIN thông qua các ví dụ cụ thể.
+
+### Cấu trúc Chỉ mục GIN
+
+#### Cấu trúc Vật lý
+
+Lưu trữ vật lý của chỉ mục GIN chứa các nội dung sau:
+
+*   **Entry (Mục nhập):** Một phần tử trong chỉ mục GIN, có thể coi là một vị trí từ và cũng có thể hiểu là một khóa.
+*   **Entry tree (Cây Mục nhập):** Một cây B-tree được xây dựng trên các Entry.
+*   **Posting list (Danh sách Vị trí):** Một danh sách liên kết các vị trí vật lý (heap ctid, số dòng trong bảng heap) nơi một Entry xuất hiện.
+*   **Posting tree (Cây Vị trí):** Một cây B-tree được xây dựng trên danh sách liên kết các vị trí vật lý (heap ctid, số dòng trong bảng heap) nơi một Entry xuất hiện. Vì vậy, KHÓA của cây vị trí là ctid, còn KHÓA của cây mục nhập là giá trị của cột được lập chỉ mục.
+*   **Pending list (Danh sách Chờ xử lý):** Một danh sách liên kết lưu trữ tạm thời các tuple chỉ mục, được sử dụng cho các thao tác chèn trong chế độ `fastupdate`.
+
+Từ những điều trên, có thể thấy chỉ mục GIN chủ yếu bao gồm cây mục nhập (Entry tree) và cây vị trí (posting tree) (hoặc danh sách vị trí - posting list), trong đó cây mục nhập là cấu trúc chính của chỉ mục GIN, và cây vị trí là cây phụ trợ.
+
+Cây mục nhập tương tự như b+tree, và cây vị trí tương tự như b-tree.
+
+Ngoài ra, cả cây mục nhập và cây vị trí đều được tổ chức theo thứ tự dựa trên KHÓA.
+
+#### Cấu trúc Logic
+
+Về mặt logic, chỉ mục GIN có thể được coi là một mối quan hệ, và mối quan hệ này có hai cấu trúc:
+
+**Lập chỉ mục chỉ một cột của bảng gốc**
+
+| key  | value                     |
+| :--- | :------------------------ |
+| key1 | Danh sách Vị trí (hoặc cây vị trí) |
+| key2 | Danh sách Vị trí (hoặc cây vị trí) |
+| …    | …                         |
+
+**Lập chỉ mục nhiều cột của bảng gốc (chỉ mục phức hợp, đa cột)**
+
+| column_id   | key  | value                     |
+| :---------- | :--- | :------------------------ |
+| Số cột 1    | key1 | Danh sách Vị trí (hoặc cây vị trí) |
+| Số cột 2    | key1 | Danh sách Vị trí (hoặc cây vị trí) |
+| Số cột 3    | key1 | Danh sách Vị trí (hoặc cây vị trí) |
+| …           | …    | …                         |
+
+Từ đây có thể thấy, theo cấu trúc này, đối với cùng một khóa trong các cột khác nhau của bảng gốc, nó cũng sẽ được coi là một khóa khác trong chỉ mục GIN.
+
+### Truy xuất Toàn văn (Full-text Retrieval)
+
+Lĩnh vực ứng dụng chính của GIN là tăng tốc tìm kiếm toàn văn. Do đó, ở đây chúng ta sẽ giới thiệu chỉ mục GIN bằng một ví dụ về tìm kiếm toàn văn.
+
+Tạo một bảng, trong đó `doc_tsv` có kiểu dữ liệu tìm kiếm văn bản (`tsvector`), kiểu này có thể tự động sắp xếp và loại bỏ các phần tử trùng lặp:
+
+```sql
+pg_study=# create table ts(doc text, doc_tsv tsvector);
+CREATE TABLE
+
+pg_study=# insert into ts(doc) values
+  ('Can a sheet slitter slit sheets?'),
+  ('How many sheets could a sheet slitter slit?'),
+  ('I slit a sheet, a sheet I slit.'),
+  ('Upon a slitted sheet I sit.'),
+  ('Whoever slit the sheets is a good sheet slitter.'),
+  ('I am a sheet slitter.'),
+  ('I slit sheets.'),
+  ('I am the sleekest sheet slitter that ever slit sheets.'),
+  ('She slits the sheet she sits on.');
+INSERT 0 9
+
+pg_study=# update ts set doc_tsv = to_tsvector(doc);
+UPDATE 9
+
+pg_study=# create index on ts using gin(doc_tsv);
+CREATE INDEX
+```
+
+Cấu trúc của chỉ mục GIN này như sau. Các ô vuông màu đen là số TID (số dòng), và các ô vuông màu trắng là các từ. Lưu ý rằng đây là một danh sách liên kết đơn, khác với danh sách liên kết đôi của B-tree:
+
+```
++--------+     +--------+     +--------+
+|  sheet |---->|  slit  |---->| slitter|
++--------+     +--------+     +--------+
+   |             |             |
+   v             v             v
++--------+   +--------+   +--------+
+| (0,10) |   | (0,10) |   | (0,10) |
++--------+   +--------+   +--------+
+   |             |             |
+   v             v             v
++--------+   +--------+   +--------+
+| (0,11) |   | (0,11) |   | (0,11) |
++--------+   +--------+   +--------+
+   |             |             |
+   v             v             v
+   ...           ...           ...
+```
+
+Hãy xem một ví dụ khác:
+
+```sql
+pg_study=# select ctid,doc, doc_tsv from ts;
+  ctid  |                          doc                           |                         doc_tsv
+--------+--------------------------------------------------------+---------------------------------------------------------
+ (0,10) | Can a sheet slitter slit sheets?                       | 'sheet':3,6 'slit':5 'slitter':4
+ (0,11) | How many sheets could a sheet slitter slit?            | 'could':4 'mani':2 'sheet':3,6 'slit':8 'slitter':7
+ (0,12) | I slit a sheet, a sheet I slit.                        | 'sheet':4,6 'slit':2,8
+ (0,13) | Upon a slitted sheet I sit.                            | 'sheet':4 'sit':6 'slit':3 'upon':1
+ (0,14) | Whoever slit the sheets is a good sheet slitter.       | 'good':7 'sheet':4,8 'slit':2 'slitter':9 'whoever':1
+ (0,15) | I am a sheet slitter.                                  | 'sheet':4 'slitter':5
+ (0,16) | I slit sheets.                                         | 'sheet':3 'slit':2
+ (0,17) | I am the sleekest sheet slitter that ever slit sheets. | 'ever':8 'sheet':5,10 'sleekest':4 'slit':9 'slitter':6
+ (0,18) | She slits the sheet she sits on.                       | 'sheet':4 'sit':6 'slit':2
+(9 rows)
+```
+
+Có thể thấy từ trên rằng "sheet", "slit", và "slitter" xuất hiện trong nhiều dòng, vì vậy sẽ có nhiều TID. Trong trường hợp này, một danh sách TID sẽ được tạo ra, và một cây B-tree riêng biệt sẽ được tạo cho nó.
+
+Câu lệnh sau có thể tìm ra từ xuất hiện trong bao nhiêu dòng.
+
+```sql
+pg_study=# select (unnest(doc_tsv)).lexeme, count(*) from ts
+group by 1 order by 2 desc;
+  lexeme  | count
+----------+-------
+ sheet    |     9
+ slit     |     8
+ slitter  |     5
+ sit      |     2
+ upon     |     1
+ mani     |     1
+ whoever  |     1
+ sleekest |     1
+ good     |     1
+ could    |     1
+ ever     |     1
+(11 rows)
+```
+
+### Ví dụ Truy vấn
+
+Truy vấn sau được thực thi như thế nào?
+
+```sql
+-- Vì lượng dữ liệu ở đây nhỏ, chúng ta tắt full table scan
+pg_study=# set enable_seqscan TO off;
+SET
+
+pg_study=# explain(costs off)
+select doc from ts where doc_tsv @@ to_tsquery('many & slitter');
+                             QUERY PLAN
+---------------------------------------------------------------------
+ Bitmap Heap Scan on ts
+   Recheck Cond: (doc_tsv @@ to_tsquery('many & slitter'::text))
+   ->  Bitmap Index Scan on ts_doc_tsv_idx
+         Index Cond: (doc_tsv @@ to_tsquery('many & slitter'::text))
+(4 rows)
+```
+
+Đầu tiên, trích xuất từng từ (khóa truy vấn) từ truy vấn: `mani` và `slitter`. Điều này được hoàn thành bởi một API đặc biệt, sẽ xem xét các chiến lược của kiểu dữ liệu và toán tử:
+
+```sql
+pg_study=# select amop.amopopr::regoperator, amop.amopstrategy
+from pg_opclass opc, pg_opfamily opf, pg_am am, pg_amop amop
+where opc.opcname = 'tsvector_ops'
+and opf.oid = opc.opcfamily
+and am.oid = opf.opfmethod
+and amop.amopfamily = opc.opcfamily
+and am.amname = 'gin'
+and amop.amoplefttype = opc.opcintype;
+        amopopr        | amopstrategy
+-----------------------+--------------
+ @@(tsvector,tsquery)  |            1
+ @@@(tsvector,tsquery) |            2
+(2 rows)
+```
+
+Trong cây B-tree chứa các từ, tìm danh sách TID tương ứng với hai khóa:
+
+`mani`: (0,2)
+`slitter`: (0,1), (0,2), (1,2), (1,3), (2,2)
+
+Cuối cùng, đối với mỗi TID được tìm thấy, lần lượt gọi hàm kiểm tra tính nhất quán (consistency function). Hàm này có thể xác định xem dòng được trỏ bởi TID có đáp ứng điều kiện truy vấn hay không. Vì các từ trong truy vấn được kết nối bằng toán tử `AND` (`&`), dòng được trả về chỉ là (0,2).
+
+```
+       |      |         |  consistency
+       |      |         |    function
+  TID  | mani | slitter | mani & slitter
+-------+------+---------+----------------
+ (0,1) |    f |       T |              f
+ (0,2) |    T |       T |              T
+ (1,2) |    f |       T |              f
+ (1,3) |    f |       T |              f
+ (2,2) |    f |       T |              f
+```
+
+Kết quả là:
+
+```sql
+pg_study=# select doc from ts where doc_tsv @@ to_tsquery('many & slitter');
+                     doc
+---------------------------------------------
+ How many sheets could a sheet slitter slit?
+(1 row)
+```
+
+### Vấn đề Tốc độ Cập nhật Chậm
+
+Thao tác chèn hoặc cập nhật dữ liệu trong chỉ mục GIN rất chậm. Bởi vì mỗi dòng thường chứa nhiều phần tử từ cần được lập chỉ mục. Do đó, khi thêm hoặc cập nhật một dòng, chúng ta phải cập nhật cây chỉ mục rất nhiều lần.
+
+Mặt khác, nếu nhiều dòng được cập nhật cùng lúc, một số phần tử từ của chúng có thể giống nhau, do đó tổng chi phí sẽ ít hơn so với chi phí cập nhật từng tài liệu riêng lẻ.
+
+Chỉ mục GIN có một tham số lưu trữ là `fastupdate`, chúng ta có thể chỉ định nó khi tạo chỉ mục và cập nhật sau này:
+
+```sql
+pg_study=# create index on ts using gin(doc_tsv) with (fastupdate = true);
+CREATE INDEX
+```
+
+Sau khi bật tham số này, các cập nhật sẽ được tích lũy trong một danh sách riêng biệt, không được sắp xếp. Khi danh sách này đủ lớn hoặc trong quá trình `VACUUM` (thu gom rác), tất cả các cập nhật tích lũy sẽ được thao tác ngay lập tức trên chỉ mục. Danh sách "đủ lớn" được xác định bởi tham số cấu hình `gin_pending_list_limit` hoặc tham số lưu trữ cùng tên khi tạo chỉ mục.
+
+### Tìm kiếm Khớp một phần (Partial Match Search)
+
+Truy vấn các tài liệu bắt đầu bằng `slit`:
+
+```sql
+pg_study=# select doc from ts where doc_tsv @@ to_tsquery('slit:*');
+                          doc
+--------------------------------------------------------
+ Can a sheet slitter slit sheets?
+ How many sheets could a sheet slitter slit?
+ I slit a sheet, a sheet I slit.
+ Upon a slitted sheet I sit.
+ Whoever slit the sheets is a good sheet slitter.
+ I am a sheet slitter.
+ I slit sheets.
+ I am the sleekest sheet slitter that ever slit sheets.
+ She slits the sheet she sits on.
+(9 rows)
+```
+
+Chỉ mục cũng có thể được sử dụng để tăng tốc:
+
+```sql
+pg_study=# explain (costs off)
+select doc from ts where doc_tsv @@ to_tsquery('slit:*');
+                    QUERY PLAN
+---------------------------------------------------
+ Seq Scan on ts
+   Filter: (doc_tsv @@ to_tsquery('slit:*'::text))
+(2 rows)
+```
+*(Ghi chú: Trong ví dụ cụ thể này, planner đã chọn Seq Scan, nhưng trong các trường hợp dữ liệu lớn hơn và truy vấn phù hợp, GIN có thể sử dụng chỉ mục cho tìm kiếm tiền tố).*
+
+### Tần suất Từ khóa
+
+Tạo một số dữ liệu:
+
+```sql
+fts=# alter table mail_messages add column tsv tsvector;
+fts=# update mail_messages set tsv = to_tsvector(body_plain);
+fts=# create index on mail_messages using gin(tsv);
+fts=# \timing on
+
+-- Tổng cộng có 356125 dòng dữ liệu (đã cập nhật số lượng từ bài gốc)
+fts=# select count(*) from mail_messages;
+ count
+--------
+ 356125
+(1 row)
+
+-- Ở đây, thay vì sử dụng unnest để đếm số lần một từ xuất hiện trong một dòng, vì lượng dữ liệu tương đối lớn, chúng ta sử dụng hàm ts_stat để tính toán
+fts=# select word, ndoc
+fts-# from ts_stat('select tsv from mail_messages')
+fts-# order by ndoc desc limit 3;
+ word  |  ndoc
+-------+--------
+ wrote | 231174
+ use   | 173833
+ would | 157169
+(3 rows)
+
+Time: 11556.976 ms
+```
+
+Ví dụ, chúng ta truy vấn từ hiếm khi xuất hiện trong thông tin email, chẳng hạn như "tattoo":
+
+```sql
+fts=# select word, ndoc from ts_stat('select tsv from mail_messages') where word = 'tattoo';
+  word  | ndoc
+--------+------
+ tattoo |    2
+(1 row)
+
+Time: 11236.340 ms
+```
+
+Số lần hai từ xuất hiện cùng nhau trong cùng một dòng. Chỉ có một dòng mà "wrote" và "tattoo" xuất hiện cùng lúc:
+
+```sql
+fts=# select count(*) from mail_messages where tsv @@ to_tsquery('wrote & tattoo');
+ count
+-------
+     1
+(1 row)
+
+Time: 0.550 ms
+```
+
+Hãy xem nó được thực thi như thế nào. Như đã đề cập ở trên, nếu chúng ta muốn lấy danh sách TID của hai từ bằng cách duyệt qua, hiệu quả tìm kiếm rõ ràng rất thấp: vì chúng ta phải duyệt qua hơn 200.000 giá trị, và chỉ một giá trị được lấy. Tuy nhiên, thông qua thông tin thống kê (`ts_stat`), thuật toán có thể biết rằng "wrote" xuất hiện thường xuyên, trong khi "tattoo" xuất hiện hiếm khi. Do đó, tìm kiếm từ ít được sử dụng ("tattoo") sẽ được thực hiện trước, và sau đó nó sẽ kiểm tra xem "wrote" có tồn tại trong hai dòng được truy xuất đó hay không. Bằng cách này, kết quả truy vấn có thể được lấy nhanh chóng:
+
+```sql
+fts=# select count(*) from mail_messages where tsv @@ to_tsquery('wrote & tattoo');
+ count
+-------
+     1
+(1 row)
+
+Time: 0.419 ms
+```
+*(Ghi chú: Thời gian thực thi có thể thay đổi tùy thuộc vào hệ thống và dữ liệu cụ thể).*
+
+### Giới hạn Kết quả Truy vấn
+
+Một đặc điểm của chỉ mục GIN là nó chỉ có thể trả về một bitmap chứ không thể trả về từng TID một. Do đó, tất cả các kế hoạch truy vấn trong bài viết này đều sử dụng bitmap scan.
+
+### Phương pháp Nén
+
+Một trong những ưu điểm của GIN là tính năng nén của nó. Thứ nhất, nếu cùng một từ xuất hiện trong nhiều dòng, nó sẽ chỉ được lưu trữ một lần trong chỉ mục. Thứ hai, các TID được lưu trữ theo thứ tự trong chỉ mục, điều này cho phép chúng ta sử dụng một phương pháp nén đơn giản: TID tiếp theo trong danh sách thực sự khác với TID trước đó; số này thường rất nhỏ, và so với TID sáu byte hoàn chỉnh, số bit yêu cầu ít hơn nhiều.
+
+So sánh kích thước của các chỉ mục khác nhau:
+
+Tạo một chỉ mục B-tree: GIN được xây dựng trên một kiểu dữ liệu khác (tsvector thay vì text), và kiểu dữ liệu này nhỏ hơn. Đồng thời, B-tree sẽ cắt bớt thông điệp đến trong vòng 2K.
+
+```sql
+fts=# create index mail_messages_btree on mail_messages(substring(body_plain for 2048));
+CREATE INDEX
+Time: 32709.807 ms
+```
+
+Tạo một chỉ mục GiST:
+
+```sql
+fts=# create index mail_messages_gist on mail_messages using gist(tsv);
+CREATE INDEX
+Time: 14651.884 ms
+```
+
+Xem kích thước của gin, gist và btree lần lượt:
+
+```sql
+fts=# select pg_size_pretty(pg_relation_size('mail_messages_tsv_idx')) as gin,
+fts-#              pg_size_pretty(pg_relation_size('mail_messages_gist')) as gist,
+fts-#              pg_size_pretty(pg_relation_size('mail_messages_btree')) as btree;
+  gin   |  gist  | btree
+--------+--------+--------
+ 189 MB | 111 MB | 526 MB
+(1 row)
+
+Time: 2.961 ms
+```
+
+Vì chỉ mục GIN tiết kiệm không gian hơn (trong ví dụ này so với B-tree trên text), chúng ta có thể sử dụng chỉ mục GIN thay vì chỉ mục bitmap trong quá trình di chuyển từ Oracle sang PostgreSQL. Nói chung, chỉ mục bitmap được sử dụng cho các trường có rất ít giá trị duy nhất, điều này cũng rất hiệu quả đối với GIN. Hơn nữa, PostgreSQL có thể tự động xây dựng một bitmap dựa trên bất kỳ chỉ mục nào (bao gồm GIN).
+
+## Kết luận
+
+PostgreSQL với chỉ mục GIN cung cấp một giải pháp mạnh mẽ và hiệu quả cho việc tìm kiếm toàn văn, đặc biệt là khi kết hợp với kiểu dữ liệu `tsvector` và các hàm xử lý văn bản (`to_tsvector`, `to_tsquery`, `ts_stat`). Mặc dù có những thách thức về tốc độ cập nhật so với các công cụ tìm kiếm chuyên dụng, tính năng `fastupdate` giúp cải thiện đáng kể vấn đề này.
+
+Với khả năng lập chỉ mục đảo ngược, tối ưu hóa truy vấn dựa trên tần suất từ khóa, hỗ trợ tìm kiếm phức tạp (AND, OR, NOT, prefix), và lợi thế về khả năng nén dữ liệu, GIN trong PostgreSQL có thể đáp ứng nhu cầu tìm kiếm toàn văn cho nhiều ứng dụng, có thể giảm thiểu hoặc loại bỏ sự cần thiết phải triển khai và quản lý một hệ thống tìm kiếm riêng biệt như Elasticsearch, đặc biệt là đối với các dự án đã sử dụng PostgreSQL làm cơ sở dữ liệu chính.
+
+---
+*(Đây là bản viết lại và tóm tắt từ bài viết gốc tiếng Anh)*
+```
