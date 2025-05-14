@@ -196,3 +196,77 @@ Sử dụng Prisma ORM với MongoDB mang lại nhiều lợi ích về hiệu s
 Hãy nhớ rằng, chìa khóa là luôn dùng replica set, xử lý `ObjectId` và sự khác biệt `null`/thiếu trường chính xác, định nghĩa quan hệ và tài liệu nhúng đúng cách, tận dụng `prisma db push`, và tối ưu hóa truy vấn khi cần thiết.
 
 *(Để hiểu thêm, bạn có thể tham khảo các hướng dẫn chi tiết hơn về xây dựng ứng dụng full-stack với Next.js + Prisma + MongoDB.)*
+
+# 2 MongoDB Views và Materialized Views: Khi nào nên sử dụng?
+
+Bài viết này tóm tắt sự khác biệt và tình huống sử dụng phù hợp cho Standard Views và Materialized Views trong MongoDB.
+
+## Giới thiệu
+
+MongoDB cung cấp các công cụ mạnh mẽ để đơn giản hóa truy cập và cải thiện hiệu suất truy vấn dữ liệu. Standard Views và Materialized Views là hai cách tiếp cận giúp kiểm soát cách dữ liệu được đọc và trình bày, mỗi loại có ưu nhược điểm và tình huống sử dụng riêng.
+
+## MongoDB Standard View (View) là gì?
+
+*   Về cơ bản là một **truy vấn aggregation đã được lưu sẵn (pipeline)**.
+*   Hoạt động như một **bộ sưu tập ảo (virtual collection)**.
+*   Khi truy vấn View, MongoDB sẽ chạy pipeline đã lưu trên dữ liệu gốc **tại thời điểm truy vấn**.
+*   **Đặc điểm:**
+    *   Chỉ lưu **logic định nghĩa truy vấn**, không lưu dữ quả.
+    *   Chỉ **đọc** (read-only).
+    *   Sử dụng **aggregation pipeline** để xác định nội dung.
+    *   **Không tốn thêm dung lượng lưu trữ** cho dữ liệu View.
+*   **Tóm lại:** Giống như một **lối tắt** để không phải viết lại các truy vấn phức tạp.
+
+## Materialized View là gì?
+
+*   Là một **bộ sưu tập thực** chứa **kết quả đã được tính toán trước** từ một truy vấn aggregation.
+*   **Lưu ý quan trọng:** MongoDB **không hỗ trợ Materialized View natively** (tính đến thời điểm hiện tại). Đây là một **mô hình bạn tự triển khai**.
+*   **Đặc điểm:**
+    *   **Lưu trữ kết quả** aggregation vào một collection thực.
+    *   Dữ liệu đã được **tính toán sẵn**, đọc rất nhanh.
+    *   Giả lập mô hình **denormalization** cho các truy vấn đọc nhanh.
+*   **Tóm lại:** Bạn tự xây dựng một collection lưu trữ dữ liệu đã được tổng hợp/biến đổi sẵn để đọc nhanh hơn, đánh đổi bằng độ tươi mới của dữ liệu và công sức bảo trì.
+
+## So sánh: Standard Views vs Materialized Views
+
+| Tiêu chí            | Standard Views                       | Materialized Views                        |
+| :------------------- | :----------------------------------- | :---------------------------------------- |
+| **Độ tươi mới**      | Luôn mới nhất (thời gian thực)       | Chỉ mới như lần cập nhật gần nhất         |
+| **Hiệu suất đọc**    | Phụ thuộc vào độ phức tạp pipeline | Rất nhanh (đọc từ collection)             |
+| **Hiệu suất ghi**    | Không có quá trình ghi riêng        | Nặng (phải chạy aggregation & ghi kết quả) |
+| **Lưu trữ**          | Gần như không tốn dung lượng         | Tốn dung lượng (lưu dữ liệu kết quả)     |
+| **Bảo trì**          | Thấp (chỉ định nghĩa pipeline)      | Cao (phải tự quản lý quá trình cập nhật) |
+| **Hỗ trợ Native**    | Có                                   | Không (phải tự triển khai)               |
+| **Trừu tượng/Bảo mật** | Tuyệt vời (ẩn logic, cấp quyền riêng) | Tiêu chuẩn (như collection thông thường)   |
+
+## Khi nào nên dùng Standard Views?
+
+*   **Ẩn logic phức tạp:** Đơn giản hóa truy vấn cho người dùng/ứng dụng.
+*   **Bảo mật dữ liệu:** Chỉ hiển thị một phần dữ liệu theo vai trò/quyền hạn.
+*   **Prototyping nhanh:** Định hình dữ liệu mà không cần thay đổi cấu trúc gốc.
+*   **Dashboard nhẹ:** Các dashboard cần dữ liệu thời gian thực nhưng không yêu cầu aggregation quá nặng.
+
+## Khi nào nên dùng Materialized Views (Tự triển khai)?
+
+*   **Dashboard hiệu suất cao:** Cần phản hồi truy vấn nhanh cho các phân tích phức tạp, chạy nhiều lần.
+*   **Báo cáo nặng:** Các aggregation phức tạp dễ timeout, chạy định kỳ và lưu kết quả để truy xuất nhanh.
+*   **Tổng hợp dữ liệu time-series:** Tính toán tổng hợp (ví dụ: trung bình tháng) từ dữ liệu chi tiết.
+*   **Tối ưu cho Microservice:** Tạo collection denormalized phục vụ nhu cầu đọc cụ thể của một service.
+
+## Cách triển khai cơ bản
+
+*   **Standard View:** Sử dụng `db.createView(viewName, sourceCollection, pipeline)` hoặc driver tương ứng. Cập nhật bằng cách `drop` và `createView` lại.
+*   **Materialized View:** Tự triển khai bằng aggregation với `$out` (ghi đè toàn bộ collection đích) hoặc `$merge` (cập nhật/chèn/xóa document đích theo điều kiện). Các chiến lược cập nhật bao gồm theo yêu cầu, định kỳ (cron, trigger) hoặc gần thời gian thực (Change Streams).
+
+## Đo hiệu suất
+
+Trong môi trường thử nghiệm, Materialized View cho thấy tốc độ đọc nhanh hơn đáng kể (trong ví dụ benchmark đạt tới ~98% tốc độ so với Standard View) khi truy vấn dữ liệu đã được tính toán sẵn.
+
+## Kết luận
+
+Standard Views là giải pháp đơn giản, cung cấp dữ liệu thời gian thực nhưng có thể chậm với pipeline phức tạp. Materialized Views (tự triển khai) mang lại tốc độ đọc vượt trội cho dữ liệu đã tính toán trước, nhưng cần quản lý việc cập nhật và đánh đổi độ tươi mới của dữ liệu.
+
+Lựa chọn công cụ phù hợp tùy thuộc vào nhu cầu cụ thể của bài toán (độ tươi mới vs. tốc độ đọc, mức độ phức tạp của aggregation, khả năng bảo trì). Thường có thể kết hợp cả hai phương pháp.
+
+---
+*Dựa trên nội dung từ bài viết gốc của MayFest2025.*
