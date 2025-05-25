@@ -1,7 +1,5 @@
-Tuyệt vời! Dưới đây là nội dung được dịch và định dạng lại thành file `README.md` bằng tiếng Việt.
 
-```markdown
-# Flux so với InfluxQL
+# 1 Flux so với InfluxQL
 
 Trang này ghi lại tài liệu cho phiên bản cũ hơn của InfluxDB OSS. **InfluxDB 3 Core là phiên bản ổn định mới nhất.**
 
