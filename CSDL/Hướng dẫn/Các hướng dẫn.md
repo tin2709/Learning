@@ -534,3 +534,240 @@ Nếu bạn đã đọc đến đây, có lẽ bạn muốn sử dụng Tinybird
 ---
 
 *Phần nội dung này được chuyển đổi và viết lại từ một phần của bài đăng blog "Built for real-time processing..." về so sánh dbt và Tinybird.*
+
+Tuyệt vời! Dưới đây là nội dung được viết lại dưới dạng file `README.md` bằng tiếng Việt, dựa trên thông tin bạn cung cấp.
+
+
+# 6 Hướng dẫn Xác thực Người dùng với Convex DB và Clerk
+
+Cập nhật lần cuối: 17/01/2024
+
+Hướng dẫn này trình bày cách triển khai xác thực người dùng cho ứng dụng web của bạn sử dụng Convex làm cơ sở dữ liệu backend và Clerk để quản lý quyền xác thực. Chúng ta sẽ tích hợp các công nghệ này vào một dự án Next.js.
+
+## Mục lục
+
+1.  [Giới thiệu](#1-giới-thiệu)
+2.  [Các công nghệ sử dụng](#2-các-công-nghệ-sử-dụng)
+3.  [Cấu hình Convex](#3-cấu-hình-convex)
+4.  [Cấu hình Clerk](#4-cấu-hình-clerk)
+5.  [Bắt đầu dự án](#5-bắt-đầu-dự-án)
+6.  [Tìm hiểu về Convex](#6-tìm-hiểu-về-convex)
+7.  [Tìm hiểu về Clerk](#7-tìm-hiểu-về-clerk)
+8.  [Middleware trong Next.js](#8-middleware-trong-nextjs)
+9.  [Xử lý trạng thái xác thực người dùng](#9-xử-lý-trạng-thái-xác-thực-người-dùng)
+10. [Lưu trữ thông tin người dùng](#10-lưu-trữ-thông-tin-người-dùng)
+11. [Kết luận](#11-kết-luận)
+12. [Tài liệu tham khảo](#-tài-liệu-tham-khảo)
+
+## 1. Giới thiệu
+
+Xác thực người dùng là một phần quan trọng trong hầu hết các ứng dụng web hiện đại. Với Convex và Clerk, chúng ta có thể dễ dàng triển khai một hệ thống xác thực mạnh mẽ và đáng tin cậy với ít công sức. Hướng dẫn này sẽ giúp bạn xây dựng một ứng dụng xác thực người dùng đơn giản, bắt đầu từ việc cấu hình cho đến triển khai các thành phần cần thiết.
+
+## 2. Các công nghệ sử dụng
+
+*   **Convex:** Cơ sở dữ liệu backend mạnh mẽ, cho phép lưu trữ và truy vấn dữ liệu theo thời gian thực.
+*   **Clerk:** Dịch vụ quản lý xác thực và người dùng, xây dựng trên chuẩn JWT, cung cấp các phương thức dễ dùng.
+*   **Next.js:** Framework React phổ biến, hỗ trợ Server-Side Rendering (SSR) và giúp xử lý phiên người dùng, yêu cầu máy chủ một cách dễ dàng.
+
+## 3. Cấu hình Convex
+
+Để cấu hình Convex cho dự án của bạn:
+
+1.  **Cài đặt Convex CLI và Client Library:**
+    ```bash
+    npm install convex
+    ```
+2.  **Khởi tạo Convex trong dự án:**
+    Thực hiện theo hướng dẫn của Convex để khởi tạo backend (thường là `npx convex dev` và chọn tạo dự án mới). Điều này sẽ tạo thư mục `convex/` với các tệp cấu hình ban đầu.
+3.  **Cấu hình xác thực với Clerk trong Convex:**
+    Bạn cần tạo hoặc chỉnh sửa tệp cấu hình xác thực trong thư mục `convex/` (ví dụ: `convex/auth.config.ts`) để Convex nhận biết Clerk là nhà cung cấp xác thực. Sao chép mã cấu hình cần thiết từ tài liệu chính thức của Convex về tích hợp Clerk.
+    Ví dụ cơ bản cho `convex/auth.config.ts`:
+    ```typescript
+    // convex/auth.config.ts
+    export default {
+      providers: [
+        {
+          domain: process.env.CLERK_JWT_ISSUER_DOMAIN, // Lấy từ Clerk Dashboard
+          applicationID: "convex",
+        },
+      ]
+    };
+    ```
+4.  **Lấy biến môi trường từ Clerk:**
+    *   Truy cập Clerk Dashboard, tạo một ứng dụng mới.
+    *   Lấy các biến môi trường cần thiết như `CLERK_JWT_ISSUER_DOMAIN` (thường có dạng `https://<your-clerk-instance-id>.clerk.accounts.dev`), `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` và `CLERK_SECRET_KEY`.
+    *   Thêm các biến này vào tệp `.env.local` của dự án Next.js và vào cấu hình biến môi trường của Convex deployment.
+
+## 4. Cấu hình Clerk
+
+Để cấu hình Clerk trong ứng dụng Next.js:
+
+1.  **Cài đặt Clerk SDK cho Next.js:**
+    ```bash
+    npm install @clerk/nextjs
+    ```
+    (Lưu ý: Tài liệu gốc đề cập `clerk.next` và `clerk.react`. `@clerk/nextjs` là gói chính thức và hiện đại hơn cho Next.js, đã bao gồm các chức năng cần thiết.)
+
+2.  **Bọc ứng dụng với `ClerkProvider`:**
+    Trong tệp `_app.js` (hoặc `_app.tsx` nếu dùng TypeScript) của Next.js, bọc component gốc của bạn bằng `<ClerkProvider>`:
+    ```javascript
+    // pages/_app.js
+    import { ClerkProvider } from '@clerk/nextjs';
+    import '../styles/globals.css'; // Hoặc tệp CSS của bạn
+
+    function MyApp({ Component, pageProps }) {
+      return (
+        <ClerkProvider {...pageProps}>
+          <Component {...pageProps} />
+        </ClerkProvider>
+      );
+    }
+
+    export default MyApp;
+    ```
+3.  **Thêm biến môi trường Clerk vào Next.js:**
+    Đảm bảo các biến `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` và `CLERK_SECRET_KEY` đã được thêm vào tệp `.env.local`.
+
+4.  **Sử dụng các hook và component của Clerk:**
+    Clerk cung cấp các hook như `useUser`, `useAuth` và các component như `<SignInButton>`, `<SignOutButton>`, `<UserProfile>` để dễ dàng quản lý trạng thái đăng nhập, đăng xuất và hiển thị thông tin người dùng.
+
+## 5. Bắt đầu dự án
+
+1.  **Tạo dự án Next.js mới:**
+    ```bash
+    npx create-next-app@latest my-convex-clerk-auth-app
+    cd my-convex-clerk-auth-app
+    ```
+2.  **Thực hiện các bước cấu hình Convex và Clerk** như đã mô tả ở trên.
+3.  **Xây dựng giao diện người dùng (UI):** Tạo các trang và component cần thiết cho việc đăng nhập, đăng ký, hiển thị thông tin người dùng và các trang được bảo vệ.
+4.  **Tích hợp Logic:** Sử dụng các hàm (queries, mutations) của Convex để tương tác với DB và các hook/component của Clerk để quản lý xác thực.
+
+## 6. Tìm hiểu về Convex
+
+*   **Convex là gì?** Convex là một platform backend-as-a-service cung cấp cơ sở dữ liệu thời gian thực, hàm serverless (queries, mutations, actions) và nhiều tính năng khác giúp đơn giản hóa việc phát triển backend.
+*   **Cài đặt và sử dụng:** Tham khảo tài liệu chính thức của Convex để biết chi tiết về cài đặt CLI, khởi tạo dự án, viết schema, queries và mutations.
+*   **Truy vấn và "ảnh chụp" (functions):**
+    *   **Queries:** Các hàm chỉ đọc, dùng để lấy dữ liệu từ Convex. Chúng tự động cập nhật UI khi dữ liệu thay đổi.
+    *   **Mutations:** Các hàm dùng để ghi hoặc thay đổi dữ liệu trong Convex.
+*   **Lưu trữ và truy xuất dữ liệu:** Dữ liệu được định nghĩa trong `schema.ts` và được lưu trữ an toàn trên Convex.
+
+## 7. Tìm hiểu về Clerk
+
+*   **Clerk là gì?** Clerk là một dịch vụ xác thực và quản lý người dùng hoàn chỉnh, giúp bạn dễ dàng thêm các tính năng đăng nhập, đăng ký, quản lý hồ sơ người dùng, xác thực đa yếu tố (MFA) vào ứng dụng của mình.
+*   **Cài đặt và sử dụng:** Sử dụng SDK của Clerk (ví dụ: `@clerk/nextjs`) và làm theo tài liệu hướng dẫn để tích hợp vào dự án.
+*   **Xác thực người dùng và quản lý tài khoản:** Clerk xử lý toàn bộ quy trình từ UI đăng nhập/đăng ký đến quản lý phiên và token JWT.
+*   **Quản lý quyền truy cập:** Clerk cho phép bạn định nghĩa vai trò và quyền hạn, dễ dàng tích hợp với logic ứng dụng của bạn.
+
+## 8. Middleware trong Next.js
+
+*   **Middleware là gì?** Middleware trong Next.js cho phép bạn chạy mã lệnh trước khi một yêu cầu được hoàn thành. Điều này rất hữu ích để bảo vệ các trang, kiểm tra trạng thái xác thực, chuyển hướng người dùng, v.v.
+*   **Cách sử dụng:** Tạo một tệp `middleware.js` (hoặc `middleware.ts`) ở thư mục gốc của dự án (hoặc trong `src/` nếu có).
+*   **Xử lý yêu cầu và kiểm tra trạng thái người dùng:** Clerk cung cấp `authMiddleware` giúp dễ dàng bảo vệ các route và truy cập thông tin xác thực trong middleware.
+    ```javascript
+    // middleware.js
+    import { authMiddleware } from "@clerk/nextjs";
+
+    export default authMiddleware({
+      // Các public route không yêu cầu đăng nhập
+      publicRoutes: ["/", "/sign-in", "/sign-up"],
+    });
+
+    export const config = {
+      matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+    };
+    ```
+
+## 9. Xử lý trạng thái xác thực người dùng
+
+*   **Xác thực và cấp quyền:** Clerk xử lý việc xác thực người dùng và cung cấp thông tin (ví dụ qua JWT) để Convex có thể xác minh và cấp quyền truy cập dữ liệu.
+*   **Ghi nhớ trạng thái xác thực:** Clerk quản lý phiên làm việc của người dùng thông qua cookies và local storage, đảm bảo trải nghiệm liền mạch.
+*   **Đăng ký và đăng nhập:** Sử dụng các component UI dựng sẵn của Clerk (ví dụ: `<SignIn>`, `<SignUp>`) hoặc các hook để tạo luồng đăng nhập/đăng ký tùy chỉnh.
+*   **Đăng xuất và hủy phiên:** Sử dụng hook `useClerk().signOut()` hoặc component `<SignOutButton>` để đăng xuất người dùng và hủy phiên làm việc.
+
+## 10. Lưu trữ thông tin người dùng
+
+Sau khi người dùng được xác thực bởi Clerk, bạn có thể muốn lưu trữ hoặc đồng bộ một số thông tin người dùng vào cơ sở dữ liệu Convex của mình (ví dụ: tạo một bản ghi "user profile" liên kết với Clerk User ID).
+
+1.  **Lấy thông tin người dùng từ Clerk:** Sử dụng hook `useUser()` của Clerk ở phía client hoặc `getAuth` từ `@clerk/nextjs/server` ở phía server/API routes để lấy thông tin người dùng đã đăng nhập (ví dụ: ID, email, tên).
+2.  **Tạo mutation trong Convex:** Viết một mutation trong Convex để tạo hoặc cập nhật bản ghi người dùng. Mutation này nên được bảo vệ, chỉ cho phép người dùng đã xác thực thực hiện.
+    ```typescript
+    // convex/users.ts
+    import { v } from "convex/values";
+    import { mutation, query } from "./_generated/server";
+
+    // Mutation để lưu hoặc cập nhật thông tin người dùng từ Clerk
+    export const storeOrUpdateUser = mutation({
+      args: { }, // Không cần args nếu lấy từ ctx.auth
+      handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+          throw new Error("User not authenticated.");
+        }
+
+        // Kiểm tra xem người dùng đã tồn tại trong DB chưa bằng Clerk User ID (subject)
+        const user = await ctx.db
+          .query("users") // Giả sử bạn có bảng "users"
+          .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+          .unique();
+
+        if (user === null) {
+          // Nếu người dùng chưa tồn tại, tạo mới
+          await ctx.db.insert("users", {
+            clerkId: identity.subject,
+            name: identity.name,
+            email: identity.email,
+            // Thêm các trường khác nếu cần
+          });
+        } else {
+          // Nếu người dùng đã tồn tại, có thể cập nhật thông tin nếu cần
+          // Ví dụ: await ctx.db.patch(user._id, { name: identity.name });
+        }
+        return await ctx.db
+            .query("users")
+            .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+            .unique();
+      },
+    });
+
+    // Query để lấy thông tin người dùng hiện tại (nếu đã lưu)
+    export const getCurrentUser = query({
+        args: {},
+        handler: async (ctx) => {
+            const identity = await ctx.auth.getUserIdentity();
+            if (!identity) {
+              return null;
+            }
+            return await ctx.db
+              .query("users")
+              .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+              .unique();
+        }
+    })
+    ```
+    Bạn cần định nghĩa bảng `users` và index `by_clerk_id` trong `convex/schema.ts`.
+3.  **Gọi mutation:** Gọi mutation này từ client (ví dụ, trong một `useEffect` sau khi người dùng đăng nhập thành công) để đảm bảo thông tin người dùng được lưu trữ/cập nhật trong Convex.
+4.  **Hiển thị thông tin:** Sử dụng các query của Convex để truy xuất và hiển thị thông tin người dùng đã lưu trên giao diện.
+
+## 11. Kết luận
+
+Bằng cách kết hợp sức mạnh của Convex cho backend và Clerk cho xác thực, bạn có thể xây dựng một hệ thống xác thực người dùng an toàn, mạnh mẽ và dễ bảo trì cho ứng dụng Next.js của mình. Hướng dẫn này cung cấp các bước cơ bản, bạn có thể tùy chỉnh và mở rộng dựa trên nhu cầu cụ thể của dự án.
+
+## 🔗 Tài liệu tham khảo
+
+*   [Tài liệu Convex](https://docs.convex.dev/)
+*   [Tài liệu Clerk](https://clerk.com/docs)
+*   [Tài liệu Next.js](https://nextjs.org/docs)
+*   [Ví dụ tích hợp Convex & Clerk (nếu có trên trang chủ Convex/Clerk)](https://docs.convex.dev/auth/clerk)
+
+---
+
+**Điểm nổi bật:**
+
+*   Sử dụng Convex và Clerk để xây dựng hệ thống xác thực người dùng mạnh mẽ.
+*   Hướng dẫn cấu hình chi tiết Convex và Clerk trong dự án Next.js.
+*   Cách xử lý trạng thái xác thực và lưu trữ thông tin người dùng vào Convex.
+*   Sử dụng Middleware trong Next.js để kiểm tra trạng thái người dùng và bảo vệ route.
+*   Hiển thị thông tin người dùng trên giao diện.
+```
+
+Hy vọng tệp `README.md` này sẽ hữu ích cho bạn!
