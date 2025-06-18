@@ -447,3 +447,91 @@ MobX cung cấp một cách tiếp cận trực quan và hiệu quả để qu�
 So với Redux, MobX thường yêu cầu ít boilerplate hơn và cho phép mutation trực tiếp, điều này có thể làm cho việc học và sử dụng ban đầu trở nên dễ dàng hơn. Mặc dù hệ sinh thái có thể không lớn bằng React hoặc Redux, MobX vẫn là một lựa chọn mạnh mẽ đáng cân nhắc cho các dự án React của bạn.
 
 Hãy thử sử dụng MobX trong dự án tiếp theo của bạn để trải nghiệm sự khác biệt trong quản lý state!
+
+Chắc chắn rồi! Dưới đây là nội dung bạn cung cấp, được định dạng lại bằng Markdown để dễ đọc và cấu trúc rõ ràng hơn.
+
+---
+
+# TanStack Query vs. Redux: Công cụ nào cho việc gì?
+
+**TanStack Query và Redux không phải là đối thủ cạnh tranh, mà là hai công cụ giải quyết hai loại vấn đề hoàn toàn khác nhau.** Sử dụng chúng cùng nhau chính là "best practice" cho các ứng dụng phức tạp.
+
+Để hiểu rõ, chúng ta cần phân biệt 2 loại "state" (trạng thái) trong một ứng dụng:
+
+## Client State vs. Server State: Sự khác biệt cốt lõi
+
+### 1. Client State (Trạng thái phía Client)
+*   Là trạng thái do người dùng tạo ra và chỉ tồn tại trong ứng dụng của bạn (trên trình duyệt).
+*   Nó không được lưu trữ ở server.
+*   **Ví dụ:** Trạng thái của một form đang điền dở, UI đang ở chế độ Sáng/Tối (Light/Dark mode), một modal đang được mở hay đóng, nội dung của giỏ hàng (chỉ là danh sách ID sản phẩm và số lượng).
+*   **Công cụ phù hợp:** **Redux (hoặc Zustand, Context API, v.v.)** rất giỏi trong việc quản lý loại state này.
+
+### 2. Server State (Trạng thái phía Server)
+*   Là trạng thái được lưu trữ, sở hữu và quản lý bởi server. Ứng dụng của bạn chỉ "mượn" hoặc "sao chép" nó về để hiển thị.
+*   Nó có thể bị thay đổi bởi người dùng khác bất cứ lúc nào mà bạn không biết.
+*   Nó có thể trở nên "lỗi thời" (out-of-date).
+*   **Ví dụ:** Danh sách sản phẩm, thông tin chi tiết người dùng, bài viết blog.
+*   **Công cụ phù hợp:** **TanStack Query** được sinh ra để chuyên xử lý loại state này.
+
+---
+
+## Vấn đề: Dùng Redux để quản lý "Server State"
+
+Trước khi có TanStack Query, nhiều người thường dùng Redux để quản lý cả Server State. Cách làm này dẫn đến rất nhiều vấn đề:
+
+*   **Siêu nhiều Code Boilerplate:** Để fetch một danh sách sản phẩm, bạn cần:
+    *   Actions: `FETCH_PRODUCTS_REQUEST`, `FETCH_PRODUCTS_SUCCESS`, `FETCH_PRODUCTS_FAILURE`.
+    *   Reducer: Một reducer để xử lý 3 action trên, cập nhật các state `products`, `isLoading`, `error`.
+    *   Thunk/Saga: Một middleware để thực hiện logic gọi API bất đồng bộ.
+    *   `useSelector` và `useDispatch` trong component.
+    => Rất nhiều file và code chỉ cho một tác vụ đơn giản.
+
+*   **Không có Caching thông minh:** Redux chỉ là một kho lưu trữ. Nó không biết dữ liệu `products` bạn lưu vào đã cũ hay mới. Nếu bạn chuyển trang rồi quay lại, bạn phải tự viết logic để quyết định có nên gọi lại API hay không. Việc này rất phức tạp.
+
+*   **Dữ liệu dễ bị lỗi thời:** Redux không có cơ chế tự động cập nhật khi dữ liệu trên server thay đổi. Bạn phải tự làm mới trang hoặc tự xây dựng một hệ thống polling/websocket phức tạp.
+
+*   **Redux Store bị "phình to":** Lưu trữ tất cả dữ liệu từ server vào Redux store khiến nó trở nên cồng kềnh, khó quản lý và có thể ảnh hưởng đến hiệu suất.
+
+---
+
+## Lợi ích của TanStack Query so với Redux (Khi xử lý Server State)
+
+| Tiêu chí | Dùng Redux cho Server State | Dùng TanStack Query cho Server State |
+| :--- | :--- | :--- |
+| **Mục đích chính** | Quản lý **Client State** toàn cục, đồng bộ. | Quản lý vòng đời của **Server State** (fetching, caching, synchronizing, updating). |
+| **Code Boilerplate** | **Rất nhiều** (Actions, Reducers, Thunks/Sagas). | **Rất ít** (Chủ yếu là hook `useQuery`). |
+| **Caching** | Phải tự xây dựng (rất khó). | **Tự động và cực kỳ mạnh mẽ**. Giữ cache, tự động xóa cache cũ. |
+| **Đồng bộ hóa dữ liệu** | **Không có**. Dữ liệu dễ bị lỗi thời. | **Tự động**. Tự fetch lại khi focus vào tab, khi online lại, v.v. (stale-while-revalidate). |
+| **Quản lý Loading/Error**| Phải tự tạo state `isLoading`, `error` trong reducer. | **Có sẵn** (`isLoading`, `isError`, `isFetching`...). |
+| **Deduplication** | Phải tự làm. Nếu 2 component cùng gọi action fetch, sẽ có 2 request API. | **Tự động**. Nếu 2 component cùng `useQuery` với cùng key, chỉ có 1 request API. |
+| **Optimistic Updates** | Rất phức tạp để tự xây dựng. | **Được hỗ trợ sẵn**, giúp cải thiện trải nghiệm người dùng. |
+
+---
+
+## Khi nào dùng cái nào? Mô hình "Tốt nhất từ cả hai thế giới"
+
+Đây là mô hình được khuyến khích nhất trong các dự án hiện đại:
+
+### Dùng TanStack Query cho:
+*   Tất cả mọi thứ liên quan đến việc lấy, cập nhật, xóa, sửa dữ liệu từ API.
+*   Danh sách sản phẩm, chi tiết người dùng, bình luận, bài đăng...
+*   Bất cứ dữ liệu nào mà "nguồn chân lý" (source of truth) nằm ở server.
+
+### Dùng Redux (hoặc Zustand, Context API) cho:
+*   Trạng thái xác thực người dùng (ví dụ: `isAuthenticated: true/false`, `userToken`).
+*   Trạng thái của UI (Theme Sáng/Tối, Ngôn ngữ `en/vi`).
+*   Trạng thái của một form đa bước phức tạp.
+*   Thông báo toàn cục (Global notifications).
+*   **Trạng thái giỏ hàng:** Đây là một ví dụ hay. Bạn có thể lưu `{ productId: 123, quantity: 2 }` trong Redux. Khi hiển thị giỏ hàng, bạn sẽ dùng `useQuery` của TanStack Query để lấy thông tin chi tiết (tên, giá, hình ảnh) của sản phẩm có `productId` là `123`.
+
+---
+
+## Kết luận
+
+Đừng coi TanStack Query là thứ thay thế Redux. Hãy coi chúng là những người đồng đội bổ sung cho nhau.
+
+> **Redux là bộ não quản lý trạng thái nội tại của ứng dụng bạn.**
+>
+> **TanStack Query là người trợ lý đắc lực chuyên giao tiếp với thế giới bên ngoài (server).**
+
+Việc tách bạch hai vai trò này sẽ giúp code của bạn trở nên **sạch sẽ hơn, dễ bảo trì hơn, hiệu năng cao hơn và ít lỗi hơn** rất nhiều so với việc cố gắng ép Redux làm một công việc mà nó không được thiết kế để làm.
