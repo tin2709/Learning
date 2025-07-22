@@ -1,0 +1,1 @@
+## 1 https://github.com/restyler/awesome-n8n: Useful n8n resources: list of community nodes and tutorials
