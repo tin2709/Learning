@@ -50,3 +50,7 @@ trình và mẹo khi sử dụng Java.
 24 https://eliteapp.tech/?ref=producthunt: code chung được với nhau
 
 25 https://www.web-leb.com/en : Cung cấp các ui element
+
+26 https://mailchi.mp/webtoolsweekly/web-tools-627?ref=dailydev: cung cấp các tool
+
+27 https://freesets.dev/?ref=dailydev: cung cấp các tài nguyên về thư viện,icon, video,...
