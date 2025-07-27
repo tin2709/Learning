@@ -54,3 +54,5 @@ trình và mẹo khi sử dụng Java.
 26 https://mailchi.mp/webtoolsweekly/web-tools-627?ref=dailydev: cung cấp các tool
 
 27 https://freesets.dev/?ref=dailydev: cung cấp các tài nguyên về thư viện,icon, video,...
+
+28 https://www.self.so/: tạo website từ cv và tạo đường link tới website
