@@ -56,3 +56,5 @@ trình và mẹo khi sử dụng Java.
 27 https://freesets.dev/?ref=dailydev: cung cấp các tài nguyên về thư viện,icon, video,...
 
 28 https://www.self.so/: tạo website từ cv và tạo đường link tới website
+
+29 https://prompts.chat/: prompts để hỏi với vai trò có sẵn
