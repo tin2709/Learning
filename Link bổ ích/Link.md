@@ -58,3 +58,5 @@ trình và mẹo khi sử dụng Java.
 28 https://www.self.so/: tạo website từ cv và tạo đường link tới website
 
 29 https://prompts.chat/: prompts để hỏi với vai trò có sẵn
+
+30 https://fx.hot.page/split-flap?ref=dailydev: tạo giao diện Split Flap như trong sàn chứng khoán
