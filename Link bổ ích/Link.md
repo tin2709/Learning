@@ -60,3 +60,7 @@ trình và mẹo khi sử dụng Java.
 29 https://prompts.chat/: prompts để hỏi với vai trò có sẵn
 
 30 https://fx.hot.page/split-flap?ref=dailydev: tạo giao diện Split Flap như trong sàn chứng khoán
+
+31 https://better-t-stack.dev/?ref=dailydev: Cung cấp thông tin, tài liệu, giải pháp, hoặc giới thiệu về một "technology stack" (bộ công nghệ) cụ thể
+
+32 https://eliteai.tools/: tổng hợp các ai cho các mục đích khác nhau
