@@ -315,3 +315,95 @@ Dựa trên mô tả, thư viện này chứa hai loại tài nguyên chính:
 ### Kết luận
 
 **`minimal-shared` là một ví dụ điển hình về thực hành kỹ thuật phần mềm tốt.** Nó là một thư viện phụ thuộc, đóng vai trò là nền tảng chung để chia sẻ code giữa các dự án liên quan, giúp cho việc phát triển và bảo trì trở nên hiệu quả và nhất quán hơn. Nó không phải là công cụ dành cho người dùng cuối mà là một phần không thể thiếu trong "hệ sinh thái" của Minimal UI và Zone UI.
+
+# 4 progress-tracker
+Sponsor by https://github.com/NigelOToole/progress-tracker
+
+Thư viện tạo progress từng step cho người dùng
+
+# 5 Remotion
+# Remotion - Hướng dẫn Bắt đầu Nhanh
+
+
+## 🚀 Bắt đầu
+
+Remotion cho phép bạn tạo video, hoạt ảnh (animations) và đồ họa chuyển động (motion graphics) bằng cách sử dụng các công nghệ web quen thuộc như React. Hướng dẫn này tập trung vào các bước cài đặt ban đầu.
+
+### Điều kiện tiên quyết
+
+Trước khi bắt đầu, hãy đảm bảo bạn đã cài đặt một trong những công cụ sau:
+
+*   **Node.js:** Phiên bản 16 trở lên.
+*   **Bun:** Phiên bản 1.0.3 trở lên.
+
+**🐧 Lưu ý dành cho Linux:**
+*   Yêu cầu phiên bản **2.35 trở lên của Libc**.
+*   Bạn có thể cần cài đặt thêm một số **gói phụ trợ**.
+*   **Alpine Linux** và **nixOS** hiện **không được hỗ trợ**.
+
+### Tạo Project Mới (Scaffolding)
+
+Cách dễ nhất để bắt đầu một project Remotion mới là sử dụng công cụ dòng lệnh `create-video`.
+
+1.  **Chạy lệnh tạo project:**
+
+    ```bash
+    npx create-video@latest
+    # hoặc
+    # bun create video@latest
+    # pnpm create video@latest
+    # yarn create video@latest
+    ```
+
+2.  **Chọn mẫu (template):**
+    Trình cài đặt sẽ hỏi bạn chọn một mẫu. Đối với dự án đầu tiên của bạn, mẫu **"Hello World"** được khuyến nghị mạnh mẽ vì nó cung cấp một điểm khởi đầu đơn giản.
+
+    Các mẫu thông thường như `Next.js + React Router 7` cũng có sẵn cho các thiết lập phức tạp hơn.
+
+3.  **Khởi động Remotion Studio:**
+    Sau khi project đã được tạo xong, điều hướng vào thư mục project mới của bạn và khởi động Remotion Studio:
+
+    ```bash
+    cd ten-project-cua-ban # Thay thế bằng tên thư mục project thực tế của bạn
+    npm run dev
+    # hoặc
+    # bun run dev
+    # pnpm dev
+    # yarn dev
+    ```
+    Lệnh này sẽ khởi chạy Remotion Studio trong trình duyệt của bạn, cho phép bạn xem trước và phát triển video của mình.
+
+### Cài đặt trong các Project Hiện có
+
+Nếu bạn muốn tích hợp Remotion vào một dự án đã có sẵn, vui lòng tham khảo phần riêng biệt trong tài liệu chính thức:
+
+*   [Cài đặt trong các project hiện có](https://www.remotion.dev/docs/getting-started/installation-in-existing-projects)
+
+---
+
+## ✨ Những gì bạn có thể làm với Remotion
+
+Mặc dù hướng dẫn này tập trung vào việc cài đặt, Remotion cho phép bạn:
+
+*   **Tạo hiệu ứng động (animate) cho các thuộc tính** một cách dễ dàng.
+*   **Tái sử dụng các component** để cấu trúc dự án.
+*   **Xem trước video của bạn** theo thời gian thực.
+*   **Thiết kế các hiệu ứng hình ảnh phức tạp**.
+*   **Nhúng video và âm thanh**.
+*   Tạo **video có tham số hóa (parameterized videos)**.
+*   Thực hiện **kết xuất phía máy chủ (server-side rendering)** và sử dụng **Remotion Lambda** để tạo video quy mô lớn.
+*   Tích hợp với các **công cụ AI**.
+
+---
+
+## 📚 Tài nguyên & Hỗ trợ
+
+*   **Tài liệu chính thức:** [https://www.remotion.dev/docs](https://www.remotion.dev/docs)
+*   **Cộng đồng Discord:** [Hỏi trên Discord](https://www.remotion.dev/discord)
+*   **Kho lưu trữ GitHub:** [https://github.com/remotion-dev/remotion](https://github.com/remotion-dev/remotion)
+
+---
+
+## ©️ Bản quyền
+
+© Bản quyền 2025 Remotion AG.
