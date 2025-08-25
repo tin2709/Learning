@@ -1036,7 +1036,101 @@ Trong bản demo trên, chúng ta đã triển khai tìm kiếm lai trong Postgr
 *   **Đánh giá và tinh chỉnh:** Thường xuyên đánh giá hiệu suất của hệ thống tìm kiếm lai của bạn. Sử dụng các chỉ số như độ chính xác (precision), độ thu hồi (recall), và MAP (mean average precision) để đánh giá chất lượng tìm kiếm và thực hiện các điều chỉnh cần thiết.
 *   **Tận dụng pgvectorscale:** Đối với các tập dữ liệu lớn hơn, hãy cân nhắc sử dụng `pgvectorscale`, một extension của PostgreSQL tận dụng chỉ mục StreamingDiskANN và Định lượng nhị phân thống kê (Statistical Binary Quantization) để tăng tốc tìm kiếm tương đồng vector.
 
-## Các Bước Tiếp theo
 
----
-*(Đây là bản viết lại và tóm tắt từ bài viết gốc tiếng Anh)*
+
+# Tối Ưu Hiệu Suất INSERT PostgreSQL Gấp Đôi với Kỹ Thuật UNNEST
+
+Khi làm việc với PostgreSQL, việc chèn hàng loạt dữ liệu (bulk insert) có thể gặp vấn đề về hiệu suất. Bài viết này giới thiệu một kỹ thuật mạnh mẽ sử dụng hàm `UNNEST` để tăng tốc độ `INSERT` lên gấp đôi so với phương pháp truyền thống.
+
+## Vấn Đề Với INSERT Truyền Thống
+
+Phương pháp `INSERT ... VALUES` là phổ biến nhưng hiệu suất sẽ giảm đáng kể khi số lượng bản ghi (batch size) tăng lên hàng nghìn. PostgreSQL phải xử lý từng giá trị riêng lẻ, dẫn đến thời gian *planning* kéo dài.
+
+```sql
+INSERT INTO products (name, price, category_id)
+VALUES
+('iPhone 15', 999.99, 1),
+('Samsung Galaxy S24', 899.99, 1);
+```
+
+## Giải Pháp: Sử Dụng Hàm UNNEST
+
+Thay vì cung cấp từng giá trị, chúng ta có thể nhóm dữ liệu thành các mảng (arrays) và sử dụng hàm `UNNEST` để "mở rộng" chúng thành các hàng.
+
+```sql
+INSERT INTO products (name, price, category_id)
+SELECT * FROM unnest(
+    ARRAY['iPhone 15', 'Samsung Galaxy S24'],
+    ARRAY[999.99, 899.99],
+    ARRAY[1, 1]
+);
+```
+
+## Tại Sao UNNEST Nhanh Hơn?
+
+Sự khác biệt về hiệu suất chủ yếu đến từ *thời gian planning*:
+
+*   **INSERT VALUES:** PostgreSQL cần phân tích và lập kế hoạch cho hàng nghìn tham số riêng lẻ (ví dụ: 1000 bản ghi với 3 cột = 3000 tham số).
+*   **INSERT UNNEST:** Chỉ cần xử lý số lượng mảng tương ứng với số cột (ví dụ: 3 mảng), giảm đáng kể chi phí lập kế hoạch.
+
+Thời gian thực thi có thể tương đương hoặc `UNNEST` hơi chậm hơn một chút do việc "bung" mảng, nhưng lợi ích từ việc tiết kiệm thời gian *planning* vượt trội.
+
+## Ví Dụ Thực Tế
+
+Với bảng `system_logs`:
+
+```sql
+CREATE TABLE system_logs (
+    log_id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ,
+    level TEXT,
+    message TEXT,
+    user_id INTEGER
+);
+```
+
+**Với UNNEST:**
+
+```sql
+INSERT INTO system_logs (timestamp, level, message, user_id)
+SELECT * FROM unnest(
+    ARRAY['2024-01-01 10:00:00'::timestamptz, '2024-01-01 10:01:15'::timestamptz, '2024-01-01 10:02:30'::timestamptz]::timestamptz[],
+    ARRAY['INFO', 'WARNING', 'ERROR']::text[],
+    ARRAY['User login successful', 'Failed login attempt', 'Database connection timeout']::text[],
+    ARRAY[1001, 1002, NULL]::integer[]
+);
+```
+
+## Kết Quả Benchmark
+
+Trong các thử nghiệm với 1 triệu bản ghi:
+
+*   **Batch size 1,000:** `UNNEST` nhanh hơn **2.13 lần**.
+*   **Batch size 5,000 & 10,000:** Tỷ lệ này được duy trì ổn định.
+*   Lợi ích của `UNNEST` càng rõ rệt hơn với các bảng có nhiều cột.
+
+## Khi Nào Nên Sử Dụng UNNEST?
+
+**Nên sử dụng khi:**
+
+*   Thực hiện batch insert với số lượng bản ghi lớn (ví dụ: >100 records).
+*   Cần các tính năng của `INSERT` (như `ON CONFLICT`).
+*   Không thể sử dụng `COPY` command.
+*   Hiệu suất là ưu tiên hàng đầu.
+
+**Cân nhắc:**
+
+*   Mã nguồn có thể phức tạp và khó đọc hơn một chút.
+*   Yêu cầu chuyển đổi dữ liệu thành cấu trúc mảng.
+*   Các ORM (Object-Relational Mappers) có thể không hỗ trợ cú pháp này một cách tự nhiên.
+*   Cần đảm bảo đội ngũ phát triển hiểu rõ về kỹ thuật này.
+
+## Lưu Ý Quan Trọng: COPY Command
+
+`COPY command` vẫn là phương pháp nhanh nhất cho các tác vụ bulk insert thực sự lớn. Tuy nhiên, `UNNEST` là một giải pháp trung gian tuyệt vời, mang lại sự linh hoạt của `INSERT` mà vẫn đạt được hiệu suất cao đáng kể.
+
+## Kết Luận
+
+Kỹ thuật `UNNEST` là một công cụ mạnh mẽ, tuy ít được biết đến, có thể giúp bạn tăng gấp đôi hiệu suất `INSERT` trong PostgreSQL. Mặc dù có một số đánh đổi về độ phức tạp, đây là một kỹ thuật đáng giá trong bộ công cụ của mọi nhà phát triển PostgreSQL khi đối mặt với các vấn đề về hiệu suất batch inserts. Luôn khuyến khích thử nghiệm kỹ lưỡng với dữ liệu và môi trường thực tế của bạn để đánh giá lợi ích chính xác.
+
+
