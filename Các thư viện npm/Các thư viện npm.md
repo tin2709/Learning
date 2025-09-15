@@ -402,8 +402,3 @@ Mặc dù hướng dẫn này tập trung vào việc cài đặt, Remotion cho 
 *   **Cộng đồng Discord:** [Hỏi trên Discord](https://www.remotion.dev/discord)
 *   **Kho lưu trữ GitHub:** [https://github.com/remotion-dev/remotion](https://github.com/remotion-dev/remotion)
 
----
-
-## ©️ Bản quyền
-
-© Bản quyền 2025 Remotion AG.
