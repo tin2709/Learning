@@ -64,3 +64,8 @@ trình và mẹo khi sử dụng Java.
 31 https://better-t-stack.dev/?ref=dailydev: Cung cấp thông tin, tài liệu, giải pháp, hoặc giới thiệu về một "technology stack" (bộ công nghệ) cụ thể
 
 32 https://eliteai.tools/: tổng hợp các ai cho các mục đích khác nhau
+
+33 https://tiermaker.com/single-use-tier-list/ : tạo tierlist
+![alt text](image-1.png)
+
+34 https://react-scan.com/ : giúp scan các component render bao nhiêu lần
