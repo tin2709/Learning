@@ -69,3 +69,7 @@ trình và mẹo khi sử dụng Java.
 ![alt text](image-1.png)
 
 34 https://react-scan.com/ : giúp scan các component render bao nhiêu lần
+
+35 https://studio.readyplayer.me/: tạo canvas 3d cho nhân vật như game(tải xuống file .glb)
+
+36 https://dezi.gallery/ : Boilerplate giống như một Project Template (.aep) cực xịn trong After Effects hay một Pre-rigged Model (nhân vật 3D đã gắn xương sẵn) một bộ khung code đã được viết sẵn các tính năng cơ bản mà mọi website đều cần.
