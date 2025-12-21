@@ -1,4 +1,4 @@
-# [104. Maximum Depth of Binary Tree][title104]
+# [Maximum Depth of Binary Tree][title104]
 
 ## Description
 
