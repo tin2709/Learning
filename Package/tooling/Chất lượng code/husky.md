@@ -21,3 +21,4 @@ Sau khi cài đặt, Husky sẽ tự động can thiệp vào các lệnh Git:
 Husky không phải là công cụ kiểm tra code, nó chỉ là **"người gác cổng"** gọi các công cụ khác (như ESLint, Prettier, Jest) ra làm việc vào đúng thời điểm bạn thao tác với Git.
 
 **Tóm lại:** Đây là công cụ đảm bảo tính kỷ luật và chất lượng mã nguồn, ngăn chặn code lỗi bị đưa vào hệ thống một cách tự động.
+
