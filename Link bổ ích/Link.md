@@ -68,6 +68,8 @@ trình và mẹo khi sử dụng Java.
 33 https://tiermaker.com/single-use-tier-list/ : tạo tierlist
 ![alt text](image-1.png)
 
+34 https://app.dreamify.dev/ : dùng để đọc file csv, xlsx để tạo dashboard, summary và chart
+
 34 https://react-scan.com/ : giúp scan các component render bao nhiêu lần
 
 35 https://studio.readyplayer.me/: tạo canvas 3d cho nhân vật như game(tải xuống file .glb)
