@@ -77,3 +77,5 @@ trình và mẹo khi sử dụng Java.
 37 https://dezi.gallery/ : Boilerplate giống như một Project Template (.aep) cực xịn trong After Effects hay một Pre-rigged Model (nhân vật 3D đã gắn xương sẵn) một bộ khung code đã được viết sẵn các tính năng cơ bản mà mọi website đều cần.
 
 38 https://defuddle.md/https://www.vividkit.dev : Thêm https://defuddle.md/ vào trước trang web nào thì sẽ lấy được markdown toàn bộ content của web đó
+
+39 https://github.com/csj5588/awesome-tools-repo/tree/main: Repo chứa các tool hoặc thư viện bổ ích
