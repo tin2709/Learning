@@ -79,3 +79,5 @@ trình và mẹo khi sử dụng Java.
 38 https://defuddle.md/https://www.vividkit.dev : Thêm https://defuddle.md/ vào trước trang web nào thì sẽ lấy được markdown toàn bộ content của web đó
 
 39 https://github.com/csj5588/awesome-tools-repo/tree/main: Repo chứa các tool hoặc thư viện bổ ích
+
+40 https://www.levels.fyi/vi-vn?tab=levels: tra mức lương các cty
