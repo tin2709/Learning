@@ -31,14 +31,13 @@ Kiến trúc của OpenHands đi theo hướng **"Đa tầng và Có thể kết
 *   **Thiết kế "Enterprise-First":** Thư mục `enterprise/` cho thấy sự chuẩn bị kỹ lưỡng cho môi trường doanh nghiệp với Multi-tenant (nhiều tổ chức), RBAC (phân quyền dựa trên vai trò), và hệ thống quản lý Integration (GitHub, Slack, Jira) phức tạp.
 *   **Abstraction Layer cho LLM:** Thông qua LiteLLM, OpenHands không bị phụ thuộc vào bất kỳ nhà cung cấp AI nào, cho phép chuyển đổi linh hoạt giữa OpenAI, Anthropic hay các mô hình tự host.
 
-### 3. Kỹ thuật Lập trình Chính
-
+### 3. 
 *   **Microagents & Skills:** Hệ thống sử dụng các tệp Markdown (`skills/`, `.openhands/microagents/`) để nạp kiến thức chuyên sâu cho AI theo ngữ cảnh mà không cần đào tạo lại mô hình.
 *   **Hệ thống Condenser (Nén ngữ cảnh):** Khi lịch sử hội thoại quá dài, hệ thống sử dụng các kỹ thuật như **LLM Summarization** hoặc **Observation Masking** để nén dữ liệu, giúp tiết kiệm token và giữ cho AI không bị lạc hướng.
 *   **Maintenance Task Processor:** (Trong bản Enterprise) Có một trình xử lý tác vụ bảo trì định kỳ (`run_maintenance_tasks.py`) để xử lý các việc như làm sạch dữ liệu, đồng bộ hóa người dùng từ Keycloak.
 *   **Prompt Engineering với Jinja2:** Sử dụng template engine Jinja2 một cách triệt để để xây dựng các prompt hệ thống phức tạp, cho phép thay đổi hành vi của Agent linh hoạt thông qua cấu hình.
 
-### 4. Luồng hoạt động của hệ thống (System Flow)
+### 4.  (System Flow)
 
 1.  **Khởi động (Startup):** 
     *   Người dùng đăng nhập (qua Keycloak trong Enterprise). 
